@@ -256,6 +256,7 @@ function editMedia(id){
  '<div class="field"><label>Categoria</label><select class="select" name="kind">'+mediaCategories.map(c=>
  '<option value="'+c.id+'" '+(c.id===a.kind?'selected':'')+'>'+c.title+'</option>').join('')+'</select></div>'+
  '<div class="field"><label>Tags separadas por vírgula</label><input class="input" name="tags" value="'+esc(a.tags.join(', '))+'"></div>'+
+ '<div class="field"><label>Substituir arquivo (opcional)</label><input class="input" name="replacement" type="file" accept="image/png,image/jpeg,image/webp,image/gif"><small class="muted">Mantém o mesmo vínculo nas séries e episódios.</small></div>'+
  '<div class="row between"><button type="button" class="btn" data-action="close-modal">Cancelar</button>'+
  '<button type="submit" class="btn primary">Salvar mídia</button></div></form>');
 }
@@ -264,6 +265,15 @@ async function updateMedia(form){
  try{
   await apiRequest('/api/v1/studio/media/'+encodeURIComponent(id),
    {method:'PATCH',body:JSON.stringify({name:String(fd.get('name')||''),kind:String(fd.get('kind')||'other'),tags:mediaTags(fd.get('tags'))})});
+  const replacement=fd.get('replacement');
+  if(replacement instanceof File && replacement.size){
+    if(replacement.size>mediaData.settings.maxFileMb*1024*1024)throw new Error('Arquivo maior que o limite configurado.');
+    const response=await fetch('/api/v1/studio/media/'+encodeURIComponent(id)+'/file',{
+      method:'PUT',credentials:'same-origin',headers:{'Content-Type':'application/octet-stream','x-csrf-token':csrfToken},body:replacement
+    });
+    const result=await response.json().catch(()=>({}));
+    if(!response.ok)throw new Error(result.error||'Não foi possível substituir o arquivo');
+  }
   await fetchMedia();document.getElementById('modal-root').innerHTML='';render();toast('Mídia atualizada.');
  }catch(error){toast(error.message)}
 }
