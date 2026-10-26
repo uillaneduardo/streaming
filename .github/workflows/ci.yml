@@ -9,18 +9,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Check project files
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate JS syntax
+        run: node --check prototype/app.js && node --check tests/static-smoke.cjs
+      - name: Verify static navigation and local assets
+        run: node tests/static-smoke.cjs
+      - name: Check deployment manifests
         run: |
-          test -f prototype/index.html
-          test -f compose.yml
           test -f Dockerfile
-      - name: Validate JavaScript syntax
-        run: |
-          node --check prototype/app.js
-      - name: Verify local assets
-        run: |
-          test -f prototype/assets/cover-orbita.svg
-          test -f prototype/assets/cover-mares.svg
-      - name: Basic HTML smoke check
-        run: |
-          grep -q 'id="app"' prototype/index.html
+          test -f compose.yml
+          test -f prototype/index.html
