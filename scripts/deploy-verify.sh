@@ -14,7 +14,7 @@ sudo docker compose config --quiet
 sudo docker compose build --no-cache web api
 sudo docker compose up -d db
 sudo docker compose run --rm migrate
-sudo docker compose up -d --no-deps --force-recreate api web
+sudo docker compose up -d --wait --no-deps --force-recreate api web
 sudo docker compose ps -a
 # Read the actual version file inside the running image.
 expected="$(sudo docker compose exec -T web cat /usr/share/nginx/html/version.json | tr -d '\r\n')"
