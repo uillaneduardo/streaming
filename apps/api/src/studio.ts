@@ -50,6 +50,10 @@ export function registerStudio(app:FastifyInstance){
       `SELECT m.team_id,m.user_id,m.role,u.name,u.email FROM team_members m JOIN users u ON u.id=m.user_id
       WHERE m.user_id=? OR EXISTS (SELECT 1 FROM team_members own WHERE own.team_id=m.team_id AND own.user_id=? AND own.role='manager')`,user.isAdmin?[]:[user.id,user.id]);
     const dt=(v:unknown)=>v?String(v).replace(" ","T").slice(0,19)+"Z":"";
+    const [bannerRows,sectionRows]=user.isAdmin?await Promise.all([
+      rows("SELECT id,title,subtitle,image,mobile_image,target_series_id,start_at,end_at,active,display_order FROM banners ORDER BY display_order"),
+      rows("SELECT id,title,kind,active FROM home_sections ORDER BY display_order")
+    ]):[[],[]];
     return {
       user:{id:user.id,email:user.email,name:user.name,isAdmin:user.isAdmin},
       teams,
@@ -58,7 +62,9 @@ export function registerStudio(app:FastifyInstance){
       seasons:seasons.map(s=>({id:s.id,seriesId:s.series_id,number:s.number,title:s.title})),
       episodes:episodes.map(e=>({id:e.id,seasonId:e.season_id,number:e.number,title:e.title,summary:e.summary,
         youtube:e.youtube_id||"",thumbnail:e.thumbnail,releaseAt:dt(e.release_at),endAt:dt(e.end_at),status:e.status,duration:e.duration})),
-      banners:[],homeSections:[]
+      banners:bannerRows.map(b=>({id:b.id,title:b.title,subtitle:b.subtitle,image:b.image,mobileImage:b.mobile_image||"",
+        target:b.target_series_id,startAt:dt(b.start_at),endAt:dt(b.end_at),active:!!b.active,order:b.display_order})),
+      homeSections:sectionRows.map(h=>({id:h.id,title:h.title,kind:h.kind,active:!!h.active}))
     };
   });
   app.post<{Body:{name?:unknown;email?:unknown;password?:unknown}}>("/api/v1/studio/users",async(req,reply)=>{
