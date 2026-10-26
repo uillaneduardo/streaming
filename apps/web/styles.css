@@ -197,3 +197,25 @@
  .catalog-toolbar .catalog-search{min-width:100%;max-width:none}
  .catalog-toolbar .catalog-clear{flex:1}
 }
+
+/* Bulk editing controls for editorial listings */
+.catalog-bulk-bar{display:flex;align-items:center;gap:9px;flex-wrap:wrap;padding:10px 13px;margin:8px 0 15px;background:#f6f7f9;border:1px solid #e5e8ee;border-radius:11px}
+.catalog-bulk-bar.has-selection{border-color:#e0ae9d;background:#fff8f5}
+.catalog-bulk-count{font-size:12px;font-weight:700;min-width:111px;color:#535d6c}
+.catalog-bulk-bar .select{max-width:275px;min-width:195px;height:39px;background:#fff;color:#303744;border-color:#d2d8e1}
+.catalog-bulk-bar .btn{min-height:38px}
+.catalog-bulk-bar .btn[disabled],.catalog-bulk-bar .select[disabled]{opacity:.48;cursor:not-allowed}
+.catalog-checkbox-column{width:44px;min-width:44px}
+.catalog-checkbox{display:inline-flex;align-items:center;justify-content:center;padding:7px;cursor:pointer;min-width:31px;min-height:31px}
+.catalog-checkbox input{width:17px;height:17px;accent-color:#b95b49;cursor:pointer}
+.catalog-checkbox input:focus-visible{outline:2px solid #b95b49;outline-offset:3px}
+.catalog-table tbody tr:has([data-bulk-row]:checked){background:#fff8f5}
+.catalog-status-text{font-size:11px;color:#727b89;margin-top:4px}
+.catalog-bulk-confirm ul{padding-left:21px;line-height:1.75;margin:10px 0 14px}
+.catalog-bulk-confirm>p{margin:12px 0}
+@media(max-width:720px){
+ .catalog-bulk-bar{gap:8px}
+ .catalog-bulk-count{flex:1;min-width:105px}
+ .catalog-bulk-bar .select{flex:1;max-width:100%;min-width:165px}
+ .catalog-checkbox-column{min-width:36px;width:36px}
+}
