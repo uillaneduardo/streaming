@@ -4,6 +4,7 @@ import { pool } from "./db.js";
 import {registerAuth} from "./auth.js";
 import {registerStudio} from "./studio.js";
 import {registerStudioManagement} from "./studio-management.js";
+import {registerStudioBulk} from "./studio-bulk.js";
 import {registerMedia} from "./media.js";
 import { publicEpisodeState, sanitizedYoutubeId } from "./domain/release.js";
 
@@ -11,6 +12,7 @@ const app = Fastify({ logger: true, trustProxy: true, bodyLimit:1024*1024 });
 registerAuth(app);
 registerStudio(app);
 registerStudioManagement(app);
+registerStudioBulk(app);
 registerMedia(app);
 type Row = RowDataPacket & Record<string, unknown>;
 const records = async (sql:string):Promise<Row[]> => {
@@ -27,8 +29,8 @@ app.get("/api/v1/public/bootstrap",async (_request,reply)=>{
   const [seriesRows,links,seasons,episodeRows,bannerRows,sectionRows,brandRows] = await Promise.all([
     records("SELECT id,title,slug,category,summary,poster,banner,featured FROM series WHERE visibility = 'public' ORDER BY title"),
     records("SELECT series_id,team_id FROM series_teams"),
-    records("SELECT se.id,se.series_id,se.number,se.title FROM seasons se JOIN series s ON s.id=se.series_id WHERE s.visibility='public' ORDER BY se.number"),
-    records("SELECT e.id,e.season_id,e.number,e.title,e.summary,e.youtube_id,e.thumbnail,e.release_at,e.end_at,e.status,e.duration FROM episodes e JOIN seasons se ON se.id=e.season_id JOIN series s ON s.id=se.series_id WHERE s.visibility='public' ORDER BY e.number"),
+    records("SELECT se.id,se.series_id,se.number,se.title FROM seasons se JOIN series s ON s.id=se.series_id WHERE s.visibility='public' AND se.status='published' ORDER BY se.number"),
+    records("SELECT e.id,e.season_id,e.number,e.title,e.summary,e.youtube_id,e.thumbnail,e.release_at,e.end_at,e.status,e.duration FROM episodes e JOIN seasons se ON se.id=e.season_id JOIN series s ON s.id=se.series_id WHERE s.visibility='public' AND se.status='published' ORDER BY e.number"),
     records("SELECT id,title,subtitle,image,mobile_image,target_series_id,start_at,end_at,active,display_order FROM banners ORDER BY display_order"),
     records("SELECT id,title,kind,active FROM home_sections ORDER BY display_order"),
     records("SELECT site_name,site_description,logo_url,icon_url FROM settings WHERE id=1")
@@ -73,7 +75,7 @@ app.get<{Params:{slug:string}}>("/api/v1/public/series/:slug",async (request,rep
 app.get<{Params:{id:string}}>("/api/v1/public/episodes/:id",async (request,reply)=>{
   const [rows]=await pool.execute<RowDataPacket[]>(`SELECT e.id,e.title,e.summary,e.youtube_id,e.release_at,e.end_at,e.status FROM episodes e
     JOIN seasons se ON se.id=e.season_id JOIN series s ON s.id=se.series_id
-    WHERE e.id=? AND s.visibility='public' LIMIT 1`,[request.params.id]);
+    WHERE e.id=? AND s.visibility='public' AND se.status='published' LIMIT 1`,[request.params.id]);
   if(!rows.length)return reply.code(404).send({error:"not_found"});
   const e=rows[0] as Row;
   const state=publicEpisodeState({status:e.status as "draft"|"scheduled"|"published"|"suspended",releaseAt:iso(e.release_at),endAt:iso(e.end_at)});

@@ -93,3 +93,14 @@ for(const forbidden of ['homelab','MariaDB','Sessão autenticada','Docker']){
  assert.ok(!js.includes(forbidden),'Technical UI copy must not mention '+forbidden);
 }
 console.log('CRUD de séries, temporadas e episódios, filtros e copy limpa: OK');
+
+for(const marker of ['catalogSelection','catalogCheckbox','data-bulk-row',
+ 'data-bulk-select-all','data-bulk-action','data-action="bulk-apply"',
+ 'bulk-confirm','function openBulkConfirmation','function performBulkOperation',
+ 'function syncCatalogSelection','catalogStatuses.seasons']){
+ assert.ok(js.includes(marker),'Bulk Studio control missing: '+marker);
+}
+assert.match(css,/\.catalog-bulk-bar/,'Bulk toolbar styled');
+assert.match(css,/\.catalog-checkbox/,'Selection styled');
+assert.match(js,/\/api\/v1\/studio\/bulk/,'Bulk operations use backend');
+console.log('Ações em lote, seleção filtrada e confirmação: OK');
