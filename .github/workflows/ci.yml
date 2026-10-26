@@ -43,7 +43,8 @@ jobs:
       - name: Compile API
         run: npm run build
   integration:
-    runs-on: ubuntu-latest
+    # Playwright Chromium binaries for this pinned release support Ubuntu 24.04 LTS.
+    runs-on: ubuntu-24.04
     env:
       DB_PASSWORD: ci-temporary-password-not-for-production
       DB_ROOT_PASSWORD: ci-temporary-root-password
