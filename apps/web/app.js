@@ -369,15 +369,85 @@ function formSubmit(form){const type=form.dataset.form;if(!type)return;
 if(hosted){if(['series','seasons','episodes','teams','members'].includes(type)){void saveRemoteEntity(form);}else toast('Esta operação ainda não está habilitada.');return;}
 const f=new FormData(form),v=Object.fromEntries(f.entries());if(type==='episodes'&&v.endAt&&v.releaseAt&&new Date(v.endAt)<=new Date(v.releaseAt)){toast('O término precisa ser posterior à estreia.');return}if(type==='banners'&&v.endAt&&v.startAt&&new Date(v.endAt)<=new Date(v.startAt)){toast('O fim da campanha precisa ser posterior ao início.');return}if(type==='series'){v.slug=slug(v.title);v.teamIds=f.getAll('teamIds');v.featured=f.has('featured')}if(type==='banners'){v.active=f.has('active');v.order=Number(v.order)||1}if(type==='episodes'){v.number=Number(v.number);v.duration=Number(v.duration);v.status=v.status||'scheduled'}if(type==='seasons')v.number=Number(v.number);if(type==='series'&&!v.teamIds.length){toast('Selecione uma equipe responsável.');return}const old=form.dataset.id&&by(type,form.dataset.id);if(old)Object.assign(old,v);else db[type].push({id:id(type[0]),...v});save();document.getElementById('modal-root').innerHTML='';render();toast('Alterações salvas nesta demonstração.')}
 function handle(action,el){const eid=el.dataset.id;
+if(action==='media-picker-close'){closeMediaPicker();return}
+if(action==='media-pick'){
+ const media=mediaData.assets.find(a=>a.id===eid);
+ if(media&&mediaPickerField){
+  const input=document.querySelector('#modal-root [name="'+mediaPickerField+'"]')||
+    document.querySelector('#settings-form [name="'+mediaPickerField+'"]');
+  if(input){input.value=media.url;input.dispatchEvent(new Event('input',{bubbles:true}));}
+  closeMediaPicker();toast('Imagem selecionada.');
+ }return;
+}
+if(action==='media-choose'){openMediaPicker(el.dataset.field,el.dataset.kind);return}
+if(action==='media-upload-open'){mediaUploadModal();return}
+if(action==='media-edit'){editMedia(eid);return}
+if(action==='media-copy'){
+ const item=mediaData.assets.find(a=>a.id===eid);
+ if(item)navigator.clipboard?.writeText(new URL(item.url,location.origin).href).then(()=>toast('Link copiado.'),()=>toast('Não foi possível copiar.'));
+ return;
+}
+if(action==='media-download'){
+ const item=mediaData.assets.find(a=>a.id===eid);
+ if(item)window.open(item.url+'?download=1','_blank','noopener');
+ return;
+}
+if(action==='media-delete'){void deleteMedia(eid);return}
 if(action==='logout'){void logoutStudio();return}
-if(hosted&&route.studio&&(/^(create-banner|edit-banner|add-media|reset|move-section|toggle-section)$/.test(action))){
+if(hosted&&route.studio&&(/^(create-banner|edit-banner|reset|move-section|toggle-section)$/.test(action))){
   toast('Funcionalidade administrativa em migração. Nenhum dado foi alterado.');return;
 }
 switch(action){case'route':nav(el.dataset.path);break;case'go-studio':nav('/studio/dashboard');break;case'go-series':nav('/serie/'+eid);break;case'watch':if(eid)nav('/assistir/'+eid);break;case'play-video':{const e=by('episodes',eid);if(!e||!playable(e))break;if(ytId(e.youtube)){activeVideo=eid;render()}else toast('Vídeo fictício. Insira um link do YouTube no Studio para reproduzir.');break}case'home-view':homeView=el.dataset.view==='list'?'list':'grid';render();break;case'catalog-view':catalogView=el.dataset.view==='list'?'list':'grid';localStorage.setItem('cenalivre-catalog-view',catalogView);render();break;case'filter-cat':filterCategory=el.dataset.cat;history.replaceState(null,'','#/explorar');render();break;case'fav':{const i=db.saved.indexOf(eid);if(i>=0)db.saved.splice(i,1);else db.saved.push(eid);save();render();toast(i>=0?'Removido da lista.':'Adicionado à lista deste navegador.');break}case'toggle-side':document.getElementById('sidebar')?.classList.toggle('open');break;case'close-modal':document.getElementById('modal-root').innerHTML='';break;case'create-series':openEditor('series');break;case'edit-series':openEditor('series',eid);break;case'create-season':openEditor('seasons');break;case'edit-season':openEditor('seasons',eid);break;case'create-episode':openEditor('episodes');break;case'edit-episode':openEditor('episodes',eid);break;case'create-banner':openEditor('banners');break;case'edit-banner':openEditor('banners',eid);break;case'create-team':openEditor('teams');break;case'edit-team':openEditor('teams',eid);break;case'create-member':openEditor('members');break;case'edit-member':openEditor('members',eid);break;case'add-media':openEditor('media');break;case'toggle-section':{let x=by('homeSections',eid);if(x)x.active=el.checked;save();render();break}case'move-section':{const i=db.homeSections.findIndex(x=>x.id===eid),j=i+Number(el.dataset.dir);if(j>=0&&j<db.homeSections.length)[db.homeSections[i],db.homeSections[j]]=[db.homeSections[j],db.homeSections[i]];save();render();break}case'copy-url':navigator.clipboard?.writeText(el.dataset.url).then(()=>toast('URL copiada.'),()=>toast('Não foi possível copiar automaticamente.'));break;case'reset':if(confirm('Restaurar todos os dados fictícios? Suas alterações locais serão perdidas.')){db=initial();save();nav('/studio/dashboard');render();toast('Dados restaurados.')}break;}}
-document.addEventListener('click',e=>{const el=e.target.closest('[data-action]');if(!el)return;if(el.dataset.action==='close-modal'&&e.target!==el&&e.target.closest('.modal'))return;if(el.tagName==='BUTTON')e.preventDefault();handle(el.dataset.action,el)});document.addEventListener('submit',e=>{e.preventDefault();
+document.addEventListener('click',e=>{
+ const el=e.target.closest('[data-action]');if(!el)return;
+ if(el.dataset.action==='close-modal'&&el.classList.contains('modal-backdrop')&&e.target!==el)return;
+ if(el.dataset.action==='media-picker-close'&&el.classList.contains('media-picker-backdrop')&&e.target!==el)return;
+ if(el.tagName==='BUTTON')e.preventDefault();
+ handle(el.dataset.action,el);
+});document.addEventListener('submit',e=>{e.preventDefault();
+if(e.target.id==='media-upload-form'){void submitMediaUpload(e.target);return}
+if(e.target.id==='media-edit-form'){void updateMedia(e.target);return}
+if(e.target.id==='upload-settings-form'){
+ const fd=new FormData(e.target);
+ void (async()=>{
+  try{
+   await apiRequest('/api/v1/studio/media/settings',{method:'PUT',
+    body:JSON.stringify({maxFileMb:Number(fd.get('maxFileMb')),maxFiles:Number(fd.get('maxFiles')),
+      allowedTypes:fd.getAll('allowedTypes')})});
+   await fetchMedia();render();toast('Limites de upload atualizados.');
+  }catch(err){toast(err.message)}
+ })();return;
+}
+
 if(e.target.id==='studio-login'){void loginStudio(e.target);return;}
 if(hosted&&e.target.id==='settings-form'){void saveRemoteSettings(e.target);return;}
-if(e.target.id==='settings-form'){const f=new FormData(e.target);db.preferences={siteName:f.get('siteName'),siteDescription:f.get('siteDescription'),autoplay:f.has('autoplay')};save();toast('Preferências salvas.')}else formSubmit(e.target)});document.addEventListener('change',e=>{if(e.target.id==='public-season'){studioSection=e.target.value;render()}else if(e.target.matches('input[data-action="toggle-section"]'))handle('toggle-section',e.target)});document.addEventListener('input',e=>{if(e.target.id==='public-search'){searchTerm=e.target.value;document.getElementById('explore-results').innerHTML=cardGrid(db.series.filter(x=>(filterCategory==='Todas'||x.category===filterCategory)&&`${x.title} ${x.summary} ${x.category}`.toLowerCase().includes(searchTerm.toLowerCase())))}});window.addEventListener('hashchange',()=>{studioSection='';render()});
+if(e.target.id==='settings-form'){const f=new FormData(e.target);db.preferences={siteName:f.get('siteName'),siteDescription:f.get('siteDescription'),autoplay:f.has('autoplay')};save();toast('Preferências salvas.')}else formSubmit(e.target)});document.addEventListener('change',e=>{
+if(e.target.id==='media-kind-filter'){mediaFilter=e.target.value;refreshMediaResults();return}
+if(e.target.id==='media-tag-filter'){mediaTagFilter=e.target.value;refreshMediaResults();return}
+if(e.target.id==='media-picker-kind'){updateMediaPicker();return}
+if(e.target.id==='media-picker-file'){
+ void uploadFromPicker(e.target.files?.[0]);return;
+}
+if(e.target.matches('#media-upload-form input[type="file"]')){
+ const file=e.target.files?.[0];if(!file)return;
+ const name=e.target.closest('form').elements.name;
+ if(name&&!name.value)name.value=file.name.replace(/.[^.]+$/,'');
+ const target=document.getElementById('media-upload-preview');
+ if(target){
+  const url=URL.createObjectURL(file);
+  target.innerHTML='<img src="'+url+'" alt="Prévia do upload">';
+  target.querySelector('img').addEventListener('load',()=>URL.revokeObjectURL(url),{once:true});
+ }
+ return;
+}
+if(e.target.id==='public-season'){studioSection=e.target.value;render()}else if(e.target.matches('input[data-action="toggle-section"]'))handle('toggle-section',e.target)});document.addEventListener('input',e=>{
+if(e.target.id==='media-search'){mediaSearch=e.target.value;refreshMediaResults();return}
+if(e.target.id==='media-picker-search'){updateMediaPicker();return}
+if(e.target.matches('.media-field [name]')){
+ const preview=e.target.closest('.media-field').querySelector('.media-field-preview');
+ if(preview)preview.innerHTML=e.target.value?'<img src="'+esc(e.target.value)+'" alt="Prévia">':'<span class="muted">Nenhuma imagem selecionada</span>';
+}
+if(e.target.id==='public-search'){searchTerm=e.target.value;document.getElementById('explore-results').innerHTML=cardGrid(db.series.filter(x=>(filterCategory==='Todas'||x.category===filterCategory)&&`${x.title} ${x.summary} ${x.category}`.toLowerCase().includes(searchTerm.toLowerCase())))}});window.addEventListener('hashchange',()=>{studioSection='';render()});
 render();
 // Carregamento público separado dos dados administrativos (evita vazamento de rascunhos no portal).
 if(hosted){
