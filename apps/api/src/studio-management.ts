@@ -213,6 +213,37 @@ export function registerStudioManagement(app:FastifyInstance) {
     await audit(actor.id,"episode.updated","episode",id);
     return {ok:true};
   });
+  const bannerData=(body:Obj)=>{
+    const title=txt(body.title,180),subtitle=typeof body.subtitle==="string"&&body.subtitle.length<=10000?body.subtitle:null;
+    const image=safePath(body.image),mobile=body.mobileImage?safePath(body.mobileImage):null;
+    const target=body.target,order=integer(body.order,1,10000),start=dateParam(body.startAt),end=dateParam(body.endAt);
+    if(!title||subtitle===null||!image||(body.mobileImage&&!mobile)||!goodId(target)||order===null||
+       start===undefined||end===undefined||(start&&end&&end<=start)||typeof body.active!=="boolean")return null;
+    return {title,subtitle,image,mobile,target,order,start,end,active:body.active};
+  };
+  app.post<{Body:Obj}>("/api/v1/studio/banners",async(req,reply)=>{
+    const user=await requireActor(req,reply,true);if(!user)return;
+    if(!user.isAdmin)return err(reply,403,"forbidden");
+    const b=bannerData(req.body||{});if(!b)return err(reply,400,"invalid_banner");
+    if(!(await records("SELECT id FROM series WHERE id=?",[b.target])).length)return err(reply,404,"series_not_found");
+    const id=randomUUID();
+    await pool.execute("INSERT INTO banners(id,title,subtitle,image,mobile_image,target_series_id,start_at,end_at,active,display_order) VALUES(?,?,?,?,?,?,?,?,?,?)",
+      [id,b.title,b.subtitle,b.image,b.mobile,b.target,b.start,b.end,b.active,b.order]);
+    await audit(user.id,"banner.created","banner",id);
+    return reply.code(201).send({id});
+  });
+  app.put<{Params:{id:string};Body:Obj}>("/api/v1/studio/banners/:id",async(req,reply)=>{
+    const user=await requireActor(req,reply,true);if(!user)return;
+    if(!user.isAdmin)return err(reply,403,"forbidden");
+    if(!goodId(req.params.id))return err(reply,400,"invalid_id");
+    const b=bannerData(req.body||{});if(!b)return err(reply,400,"invalid_banner");
+    if(!(await records("SELECT id FROM banners WHERE id=?",[req.params.id])).length)return err(reply,404,"banner_not_found");
+    if(!(await records("SELECT id FROM series WHERE id=?",[b.target])).length)return err(reply,404,"series_not_found");
+    await pool.execute("UPDATE banners SET title=?,subtitle=?,image=?,mobile_image=?,target_series_id=?,start_at=?,end_at=?,active=?,display_order=? WHERE id=?",
+      [b.title,b.subtitle,b.image,b.mobile,b.target,b.start,b.end,b.active,b.order,req.params.id]);
+    await audit(user.id,"banner.updated","banner",req.params.id);
+    return {ok:true};
+  });
   app.get("/api/v1/studio/settings",async(req,reply)=>{
     const actor=await requireActor(req,reply);if(!actor)return;
     if(!actor.isAdmin)return err(reply,403,"forbidden");
