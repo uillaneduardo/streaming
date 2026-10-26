@@ -129,6 +129,157 @@ async function saveRemoteSettings(form){
   }catch(error){toast(error.message||'Não foi possível atualizar configurações.')}
 }
 
+
+const mediaCategories=[{id:'poster',title:'Pôster'},{id:'banner',title:'Banner'},{id:'thumbnail',title:'Thumbnail'},{id:'icon',title:'Ícone'},{id:'logo',title:'Logotipo'},{id:'other',title:'Outros'}];
+let mediaData={assets:[],settings:{maxFileMb:8,maxFiles:500,allowedTypes:['png','jpeg','webp','gif']}};
+let mediaSearch='',mediaFilter='all',mediaTagFilter='';
+let mediaPickerField=null,mediaPickerKind='all';
+async function fetchMedia(){
+ if(!hosted||!studioUser)return;
+ try{mediaData=await apiRequest('/api/v1/studio/media');}
+ catch(error){console.warn('Biblioteca indisponível',error);}
+}
+const mediaName=k=>mediaCategories.find(x=>x.id===k)?.title||'Outros';
+const mediaTags=s=>String(s||'').split(/[,;\n]/).map(t=>t.trim().toLowerCase()).filter(Boolean);
+const mediaFilterItems=(items,search,kind,tag)=>items.filter(a=>
+  (kind==='all'||a.kind===kind)&&(!tag||a.tags.includes(tag))&&
+  (!search||[a.name,a.originalName,a.kind,...a.tags].join(' ').toLowerCase().includes(search.toLowerCase())));
+const mediaCard=(a,picker=false)=>'<article class="media-card"><div class="media-image"><img src="'+esc(a.url)+'" alt="'+esc(a.name)+'" loading="lazy"></div>'+
+ '<strong title="'+esc(a.name)+'">'+esc(a.name)+'</strong>'+
+ '<div class="media-meta">'+mediaName(a.kind)+' · '+(a.size/1048576).toFixed(2)+' MB</div>'+
+ '<div class="media-tags">'+a.tags.map(t=>'<span class="media-tag">'+esc(t)+'</span>').join('')+'</div>'+
+ '<div class="media-actions">'+(picker?
+ '<button class="btn small primary" data-action="media-pick" data-id="'+esc(a.id)+'">Selecionar</button>':
+ '<button class="btn small" data-action="media-edit" data-id="'+esc(a.id)+'">Editar</button>'+
+ '<button class="btn small" data-action="media-copy" data-id="'+esc(a.id)+'">Copiar</button>'+
+ '<button class="btn small" data-action="media-download" data-id="'+esc(a.id)+'">Baixar</button>'+
+ '<button class="btn small danger" data-action="media-delete" data-id="'+esc(a.id)+'">Excluir</button>')+'</div></article>';
+function openMediaPicker(field,kind){
+ mediaPickerField=field;mediaPickerKind=kind||'all';
+ let root=document.getElementById('media-picker-root');
+ if(!root){root=document.createElement('div');root.id='media-picker-root';document.body.append(root)}
+ root.innerHTML='<div class="media-picker-backdrop" data-action="media-picker-close">'+
+ '<div class="media-picker-panel form-surface-light" role="dialog" aria-modal="true" aria-label="Escolher mídia">'+
+ '<div class="row between"><h2>Escolher mídia</h2><button class="btn small" data-action="media-picker-close">✕</button></div>'+
+ '<p class="muted">Selecione uma imagem já enviada ou envie um novo arquivo.</p>'+
+ '<div class="media-toolbar"><input class="input" id="media-picker-search" placeholder="Pesquisar por nome ou tag">'+
+ '<select class="select" id="media-picker-kind">'+
+ '<option value="all">Todos os tipos</option>'+mediaCategories.map(c=>'<option value="'+c.id+'" '+(c.id===mediaPickerKind?'selected':'')+'>'+c.title+'</option>').join('')+
+ '</select><label class="btn primary media-file-btn">+ Enviar imagem<input type="file" id="media-picker-file" accept="image/png,image/jpeg,image/webp,image/gif" hidden></label></div>'+
+ '<div class="media-grid" id="media-picker-grid"></div>'+
+ '<p id="media-picker-feedback" class="muted tiny"></p></div></div>';
+ updateMediaPicker();
+}
+function updateMediaPicker(){
+ const root=document.getElementById('media-picker-grid');if(!root)return;
+ const query=document.getElementById('media-picker-search')?.value||'';
+ const kind=document.getElementById('media-picker-kind')?.value||'all';
+ const items=mediaFilterItems(mediaData.assets,query,kind,'');
+ root.innerHTML=items.length?items.map(a=>mediaCard(a,true)).join(''):'<p class="muted">Nenhuma mídia encontrada. Envie uma imagem para começar.</p>';
+}
+function closeMediaPicker(){document.getElementById('media-picker-root')?.remove();mediaPickerField=null}
+function mediaField(label,name,value='',kind='other'){
+ return '<div class="field media-field"><label>'+esc(label)+'</label>'+
+ '<div class="media-input-row"><input class="input" name="'+name+'" value="'+esc(value)+'" placeholder="Selecione da Biblioteca ou cole uma URL">'+
+ '<button type="button" class="btn small" data-action="media-choose" data-field="'+name+'" data-kind="'+kind+'">Biblioteca</button></div>'+
+ '<div class="media-field-preview">'+(value?'<img src="'+esc(value)+'" alt="Prévia">':'<span class="muted">Nenhuma imagem selecionada</span>')+'</div></div>';
+}
+function mediaUploadModal(){
+ const kinds=mediaCategories.map(c=>'<option value="'+c.id+'">'+c.title+'</option>').join('');
+ const teams=studioUser?.isAdmin?'<div class="field"><label>Equipe proprietária</label><select class="select" name="teamId"><option value="">Biblioteca global</option>'+
+ db.teams.map(t=>'<option value="'+esc(t.id)+'">'+esc(t.name)+'</option>').join('')+'</select></div>':
+ '<div class="field"><label>Equipe proprietária</label><select class="select" name="teamId">'+db.teams.map(t=>'<option value="'+esc(t.id)+'">'+esc(t.name)+'</option>').join('')+'</select></div>';
+ modal('Enviar mídia','<form id="media-upload-form" class="stack">'+
+ '<label class="media-drop"><span>Selecione uma imagem para enviar</span><small>PNG, JPEG, WebP ou GIF · Limite: '+mediaData.settings.maxFileMb+' MB</small>'+
+ '<input type="file" name="file" accept="image/png,image/jpeg,image/webp,image/gif" required></label>'+
+ '<div id="media-upload-preview" class="media-preview">Prévia da imagem aparecerá aqui</div>'+
+ '<div class="field"><label>Nome da mídia</label><input class="input" name="name" placeholder="Ex.: Capa da temporada 1" required></div>'+
+ '<div class="field"><label>Categoria</label><select name="kind" class="select">'+kinds+'</select></div>'+
+ '<div class="field"><label>Tags (separadas por vírgula)</label><input class="input" name="tags" placeholder="destaque, série, temporada"></div>'+
+ teams+'<div class="row between"><button class="btn" data-action="close-modal" type="button">Cancelar</button>'+
+ '<button class="btn primary" type="submit">Enviar arquivo</button></div></form>');
+}
+async function mediaUpload(file,{name,kind,teamId,tags}){
+ if(!file)return;
+ const ext=(file.name.split('.').pop()||'').toLowerCase();
+ if(!['png','jpg','jpeg','webp','gif'].includes(ext)){toast('Formato não aceito.');return}
+ if(file.size>mediaData.settings.maxFileMb*1024*1024){toast('Arquivo excede o limite configurado.');return}
+ const request={
+  method:'POST',credentials:'same-origin',
+  headers:{'Content-Type':'application/octet-stream','x-csrf-token':csrfToken,
+   'x-media-name':encodeURIComponent(name||file.name).slice(0,500),'x-media-kind':kind||'other',
+   'x-media-team':teamId||'','x-media-tags':encodeURIComponent(tags||'').slice(0,1000)},
+  body:file
+ };
+ const response=await fetch('/api/v1/studio/media/upload',request);
+ const data=await response.json().catch(()=>({}));
+ if(!response.ok)throw new Error(({file_too_large:'Arquivo muito grande',unsupported_file_format:'Formato não permitido',
+   media_limit_reached:'Limite de arquivos atingido',forbidden:'Sem permissão para essa equipe'}[data.error])||data.error||'Falha no upload');
+ await fetchMedia();
+ return data;
+}
+async function uploadFromPicker(file){
+ if(!file)return;
+ const team=studioUser?.isAdmin?'':db.teams[0]?.id||'';
+ const msg=document.getElementById('media-picker-feedback');
+ if(msg)msg.textContent='Enviando '+file.name+'...';
+ try{
+  const result=await mediaUpload(file,{name:file.name,kind:mediaPickerKind==='all'?'other':mediaPickerKind,teamId:team,tags:''});
+  if(!result)return;
+  if(mediaPickerField){
+   const target=document.querySelector('#modal-root [name="'+mediaPickerField+'"]')||document.querySelector('#settings-form [name="'+mediaPickerField+'"]');
+   if(target){target.value=result.url;target.dispatchEvent(new Event('input',{bubbles:true}))}
+   closeMediaPicker();
+  }else{updateMediaPicker()}
+  toast('Imagem enviada e disponível na Biblioteca.');
+ }catch(error){if(msg)msg.textContent=error.message;toast(error.message)}
+}
+async function submitMediaUpload(form){
+ const fd=new FormData(form),file=fd.get('file');
+ if(!(file instanceof File)){toast('Selecione uma imagem.');return}
+ const btn=form.querySelector('[type="submit"]');if(btn)btn.disabled=true;
+ try{
+  const result=await mediaUpload(file,{name:String(fd.get('name')||file.name),kind:String(fd.get('kind')||'other'),
+   teamId:String(fd.get('teamId')||''),tags:String(fd.get('tags')||'')});
+  if(!result)return;
+  document.getElementById('modal-root').innerHTML='';
+  render();toast('Upload concluído.');
+ }catch(error){toast(error.message)}
+ finally{if(btn)btn.disabled=false}
+}
+function editMedia(id){
+ const a=mediaData.assets.find(x=>x.id===id);if(!a)return;
+ modal('Editar mídia','<form id="media-edit-form" data-id="'+esc(a.id)+'" class="stack">'+
+ '<div class="media-edit-preview"><img src="'+esc(a.url)+'" alt="'+esc(a.name)+'"></div>'+
+ '<div class="field"><label>Nome</label><input class="input" name="name" value="'+esc(a.name)+'" required></div>'+
+ '<div class="field"><label>Categoria</label><select class="select" name="kind">'+mediaCategories.map(c=>
+ '<option value="'+c.id+'" '+(c.id===a.kind?'selected':'')+'>'+c.title+'</option>').join('')+'</select></div>'+
+ '<div class="field"><label>Tags separadas por vírgula</label><input class="input" name="tags" value="'+esc(a.tags.join(', '))+'"></div>'+
+ '<div class="row between"><button type="button" class="btn" data-action="close-modal">Cancelar</button>'+
+ '<button type="submit" class="btn primary">Salvar mídia</button></div></form>');
+}
+async function updateMedia(form){
+ const fd=new FormData(form),id=form.dataset.id;
+ try{
+  await apiRequest('/api/v1/studio/media/'+encodeURIComponent(id),
+   {method:'PATCH',body:JSON.stringify({name:String(fd.get('name')||''),kind:String(fd.get('kind')||'other'),tags:mediaTags(fd.get('tags'))})});
+  await fetchMedia();document.getElementById('modal-root').innerHTML='';render();toast('Mídia atualizada.');
+ }catch(error){toast(error.message)}
+}
+async function deleteMedia(id){
+ if(!confirm('Excluir esta mídia permanentemente? Arquivos utilizados em séries ou episódios não podem ser removidos.'))return;
+ try{await apiRequest('/api/v1/studio/media/'+encodeURIComponent(id),{method:'DELETE'});
+  await fetchMedia();render();toast('Mídia excluída.')}
+ catch(error){toast(error.message==='media_in_use'?'Essa imagem está vinculada a um conteúdo. Substitua antes de excluir.':error.message)}
+}
+function refreshMediaResults(){
+ const target=document.getElementById('media-library-grid');if(!target)return;
+ const data=mediaFilterItems(mediaData.assets,mediaSearch,mediaFilter,mediaTagFilter);
+ target.innerHTML=data.length?data.map(a=>mediaCard(a)).join(''):
+ '<div class="empty">Nenhuma mídia encontrada para os filtros escolhidos.</div>';
+ const count=document.getElementById('media-library-count');if(count)count.textContent=data.length+' arquivo(s)';
+}
+
 let catalogView=localStorage.getItem('cenalivre-catalog-view')==='list'?'list':'grid';let homeView='grid';
 let route={},filterCategory='Todas',searchTerm='',studioSection='';const nav=(path)=>{location.hash=path;window.scrollTo(0,0)};const parse=()=>{let p=location.hash.slice(1)||'/';route={path:p,parts:p.split('/').filter(Boolean),studio:p.startsWith('/studio')};if(!p.startsWith('/assistir/'))activeVideo=null};let activeVideo=null;
 function toast(msg){const el=document.getElementById('toast-root');el.innerHTML=`<div class="toast">${esc(msg)}</div>`;setTimeout(()=>{if(el)el.innerHTML=''},3000)}
