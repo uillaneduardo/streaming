@@ -52,7 +52,7 @@ export function registerStudio(app:FastifyInstance){
     const dt=(v:unknown)=>v?String(v).replace(" ","T").slice(0,19)+"Z":"";
     const [bannerRows,sectionRows]=user.isAdmin?await Promise.all([
       rows("SELECT id,title,subtitle,image,mobile_image,target_series_id,start_at,end_at,active,display_order FROM banners ORDER BY display_order"),
-      rows("SELECT id,title,kind,active FROM home_sections ORDER BY display_order")
+      rows("SELECT id,title,kind,active,display_order FROM home_sections ORDER BY display_order,id")
     ]):[[],[]];
     return {
       user:{id:user.id,email:user.email,name:user.name,isAdmin:user.isAdmin},
@@ -64,7 +64,7 @@ export function registerStudio(app:FastifyInstance){
         youtube:e.youtube_id||"",thumbnail:e.thumbnail,releaseAt:dt(e.release_at),endAt:dt(e.end_at),status:e.status,duration:e.duration})),
       banners:bannerRows.map(b=>({id:b.id,title:b.title,subtitle:b.subtitle,image:b.image,mobileImage:b.mobile_image||"",
         target:b.target_series_id,startAt:dt(b.start_at),endAt:dt(b.end_at),active:!!b.active,order:b.display_order})),
-      homeSections:sectionRows.map(h=>({id:h.id,title:h.title,kind:h.kind,active:!!h.active}))
+      homeSections:sectionRows.map(h=>({id:h.id,title:h.title,kind:h.kind,active:!!h.active,order:h.display_order}))
     };
   });
   app.post<{Body:{name?:unknown;email?:unknown;password?:unknown}}>("/api/v1/studio/users",async(req,reply)=>{

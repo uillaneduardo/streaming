@@ -204,6 +204,77 @@ async function call(path,method='GET',body){
   assert.equal(publicBranding.data.branding.logoUrl,'assets/orbital-poster.svg');
 
 
+
+  // CMS layout: create, edit, visibility, bulk updates and stable persisted ordering.
+  const sectionsBefore=(await call('/api/v1/studio/bootstrap')).data.homeSections;
+  assert(sectionsBefore.length>=4,'Seeded home sections available');
+  const createdSection=await call('/api/v1/studio/sections','POST',{
+    title:'Coleção QA',kind:'featured',active:false
+  });
+  assert.equal(createdSection.code,201,'Create section');
+  const sidSection=createdSection.data.id;
+  assert.equal((await call('/api/v1/studio/sections/'+sidSection,'PUT',{
+    title:'Coleção revisada',kind:'latest',active:false
+  })).code,200,'Edit section');
+  const homeBatch=(resource,action,ids,active)=>
+    call('/api/v1/studio/editorial/bulk','POST',{
+      resource,action,ids,...(action==='set_active'?{active}:{})
+    });
+  assert.equal((await homeBatch('sections','set_active',[sidSection],true)).code,200,'Show section in batch');
+  const publicSection=await call('/api/v1/public/bootstrap');
+  assert(publicSection.data.homeSections.some(x=>x.id===sidSection),'Published section on portal');
+  const sectionIds=(await call('/api/v1/studio/bootstrap')).data.homeSections.map(x=>x.id);
+  const newOrder=sectionIds.slice().reverse();
+  assert.equal((await call('/api/v1/studio/sections/order','PUT',{ids:newOrder})).code,200,'Reorder CMS');
+  assert.deepEqual((await call('/api/v1/studio/bootstrap')).data.homeSections.map(x=>x.id),newOrder,'Order persisted');
+  assert.equal((await call('/api/v1/studio/sections/order','PUT',{ids:[sidSection]})).code,409,'Refuse partial ordering');
+  assert.equal((await homeBatch('sections','set_active',[sidSection,'missing-section'],false)).code,404,'Reject unknown section in bulk');
+  assert.equal((await call('/api/v1/studio/bootstrap')).data.homeSections.find(x=>x.id===sidSection).active,true,'No partial updates');
+  assert.equal((await homeBatch('sections','set_active',[sidSection],false)).code,200,'Hide section');
+  assert.equal((await call('/api/v1/public/bootstrap')).data.homeSections.some(x=>x.id===sidSection),false,'Hidden section leaves portal');
+  assert.equal((await homeBatch('sections','delete',[sidSection])).code,200,'Delete section in batch');
+  assert.equal((await call('/api/v1/studio/sections/'+sidSection,'DELETE')).code,404,'Deleted section no longer exists');
+  assert.equal((await call('/api/v1/studio/sections','POST',{title:'Tipo inválido',kind:'unsafe',active:true})).code,400,'Reject invalid section kind');
+
+  // Banner publishing and deleting are server persisted and atomic.
+  const anotherBanner=await call('/api/v1/studio/banners','POST',{
+    title:'Banner secundário QA',subtitle:'Capa',image:'assets/atlas-banner.svg',
+    mobileImage:'',target:sid,order:7,startAt:null,endAt:null,active:true
+  });
+  assert.equal(anotherBanner.code,201,'Create second banner');
+  assert.equal((await homeBatch('banners','set_active',[banner.data.id,anotherBanner.data.id],false)).code,200,
+    'Disable multiple banners');
+  assert.equal((await call('/api/v1/public/bootstrap')).data.banners.some(x=>x.id===banner.data.id),false,
+    'Inactive banner not in portal');
+  assert.equal((await homeBatch('banners','set_active',[banner.data.id,'missing-banner'],true)).code,404,
+    'No partial banner mutation');
+  assert.equal((await call('/api/v1/studio/bootstrap')).data.banners.find(x=>x.id===banner.data.id).active,false,
+    'Banner remains disabled after failed batch');
+  assert.equal((await homeBatch('banners','set_active',[banner.data.id],true)).code,200,'Enable campaign');
+  assert.equal((await call('/api/v1/public/bootstrap')).data.banners.some(x=>x.id===banner.data.id),true,
+    'Enabled campaign appears');
+  assert.equal((await homeBatch('banners','delete',[banner.data.id,anotherBanner.data.id])).code,200,
+    'Delete both campaigns');
+  assert.equal((await call('/api/v1/studio/banners/'+banner.data.id,'DELETE')).code,404,'Deleted banner not found');
+
+  // Calendar: date shifts are atomic and never bypass permissions or date windows.
+  const rescheduled=new Date(Date.now()+3*86400000).toISOString();
+  const endWindow=new Date(Date.now()+8*86400000).toISOString();
+  assert.equal((await call('/api/v1/studio/calendar/reschedule','POST',{
+    ids:[episodeId,future.data.id],releaseAt:rescheduled,endAt:endWindow
+  })).code,200,'Reschedule multiple episodes');
+  const scheduledAgain=await call('/api/v1/studio/bootstrap');
+  assert(scheduledAgain.data.episodes.filter(x=>[episodeId,future.data.id].includes(x.id)).every(x=>
+    Math.floor(new Date(x.releaseAt).getTime()/1000)===Math.floor(new Date(rescheduled).getTime()/1000)),'Dates persisted to second precision');
+  assert.equal((await call('/api/v1/public/episodes/'+episodeId)).data.youtube,null,
+    'Future reschedule preserves embargo');
+  assert.equal((await call('/api/v1/studio/calendar/reschedule','POST',{
+    ids:[episodeId,future.data.id],releaseAt:endWindow,endAt:rescheduled
+  })).code,400,'Reject inverted time window');
+  assert.equal((await call('/api/v1/studio/calendar/reschedule','POST',{
+    ids:[episodeId,'unknown-episode'],releaseAt:rescheduled,endAt:endWindow
+  })).code,404,'Reject entire batch when one episode is missing');
+
   // Editorial deletion is explicit and refuses to cascade productions or episodes.
   assert.equal((await call('/api/v1/studio/series/'+sid,'DELETE')).code,409,'Do not delete series with seasons');
   assert.equal((await call('/api/v1/studio/seasons/'+season.data.id,'DELETE')).code,409,'Do not delete season with episodes');
@@ -261,6 +332,10 @@ async function call(path,method='GET',body){
   assert.equal((await call('/api/v1/studio/series/s1','PUT',form)).code,200);
   const editorCsrf=csrf;csrf='';
   assert.equal((await call('/api/v1/studio/episodes/e1','DELETE')).code,403,'CSRF required for deletes');
+  assert.equal((await call('/api/v1/studio/editorial/bulk','POST',{
+    resource:'sections',action:'delete',ids:['hs1']
+  })).code,403,'CSRF required for CMS changes');
+
   assert.equal((await bulk('episodes','set_status',['e1'],'draft')).code,403,'CSRF required for bulk');
 
 
@@ -268,6 +343,16 @@ async function call(path,method='GET',body){
   csrf=editorCsrf;
   assert.equal((await call('/api/v1/studio/series/s3','PUT',form)).code,403);
   assert.equal((await call('/api/v1/studio/series/s3','DELETE')).code,403,"Cannot delete another team's series");
+  assert.equal((await call('/api/v1/studio/editorial/bulk','POST',{
+    resource:'sections',action:'set_active',ids:['hs1'],active:false
+  })).code,403,'Non-admin cannot hide CMS sections');
+  assert.equal((await call('/api/v1/studio/sections','POST',{
+    title:'Negada',kind:'all',active:true
+  })).code,403,'Non-admin cannot create CMS sections');
+  assert.equal((await call('/api/v1/studio/calendar/reschedule','POST',{
+    ids:['e1'],releaseAt:new Date(Date.now()+86400000).toISOString(),endAt:null
+  })).code,403,'Editor cannot reschedule a published episode');
+
   assert.equal((await bulk('series','set_status',['s3'],'draft')).code,403,'Cannot modify another team');
   assert.equal((await bulk('series','set_status',['s1'],'public')).code,403,'Editor grant cannot publish');
   assert.equal((await bulk('series','delete',['s3'])).code,403,'Cannot bulk delete outside team');
