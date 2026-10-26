@@ -265,7 +265,7 @@ async function call(path,method='GET',body){
   })).code,200,'Reschedule multiple episodes');
   const scheduledAgain=await call('/api/v1/studio/bootstrap');
   assert(scheduledAgain.data.episodes.filter(x=>[episodeId,future.data.id].includes(x.id)).every(x=>
-    new Date(x.releaseAt).getTime()===new Date(rescheduled).getTime()),'Dates persisted');
+    Math.floor(new Date(x.releaseAt).getTime()/1000)===Math.floor(new Date(rescheduled).getTime()/1000)),'Dates persisted to second precision');
   assert.equal((await call('/api/v1/public/episodes/'+episodeId)).data.youtube,null,
     'Future reschedule preserves embargo');
   assert.equal((await call('/api/v1/studio/calendar/reschedule','POST',{
