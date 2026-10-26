@@ -4,6 +4,7 @@ import type {RowDataPacket} from "mysql2";
 import {pool} from "./db.js";
 import {requireActor,type Actor} from "./auth.js";
 import {teamManager,seriesPermission} from "./studio.js";
+import {categoryExists} from "./categories.js";
 import {hashPassword,normalizeEmail,validateArtwork} from "./security.js";
 type Obj=Record<string,unknown>;
 type Row=RowDataPacket & Record<string,unknown>;
@@ -126,6 +127,7 @@ export function registerStudioManagement(app:FastifyInstance) {
     if(!title||!category||summary===null||!poster||!banner||
        !teamIds.length||teamIds.length>20||teamIds.some(x=>!goodId(x))||
        !["draft","public"].includes(String(visibility)))return err(reply,400,"invalid_series");
+    if(!await categoryExists(category))return err(reply,400,"unknown_category");
     if(!await writableTeam(actor,teamIds as string[]))return err(reply,403,"forbidden");
     if(visibility==="public"&&!actor.isAdmin)return err(reply,403,"publishing_requires_authorization");
     const teamRows=await records("SELECT id FROM teams WHERE id IN ("+teamIds.map(()=>"?").join(",")+")",teamIds);

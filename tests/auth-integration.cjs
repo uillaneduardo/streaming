@@ -144,6 +144,16 @@ async function call(path,method='GET',body){
   cookie=ownerCookieForInvite;csrf=ownerCsrfForInvite;
 
   assert.equal((await call('/api/v1/studio/teams/'+teamId,'PUT',{name:'Equipe Atualizada',description:'Atualização persistente'})).code,200,'Edit team');
+  // CI fixtures are explicit: migrations do not seed catalogue categories.
+  const sciFi=await call('/api/v1/studio/categories','POST',{name:'Ficção científica'});
+  assert.equal(sciFi.code,201,'Create category');
+  assert.equal((await call('/api/v1/studio/categories','POST',{name:'Ficção científica'})).code,409,'Reject duplicate category');
+  assert.equal((await call('/api/v1/studio/categories','POST',{name:'Teste'})).code,201,'Register test category');
+  assert.equal((await call('/api/v1/studio/categories')).code,200,'List categories');
+  const unused=await call('/api/v1/studio/categories','POST',{name:'Sem uso'});
+  assert.equal(unused.code,201);
+  assert.equal((await call('/api/v1/studio/categories/'+unused.data.id,'PUT',{name:'Sem uso renomeada'})).code,200,'Rename unused category');
+  assert.equal((await call('/api/v1/studio/categories/'+unused.data.id,'DELETE')).code,200,'Delete unused category');
   const title='CenaLivre Série CI '+randomBytes(4).toString('hex');
   const series=await call('/api/v1/studio/series','POST',{
     title,category:'Ficção científica',summary:'Teste de produção',poster:'assets/orbital-poster.svg',
@@ -151,6 +161,7 @@ async function call(path,method='GET',body){
   });
   assert.equal(series.code,201,'Create series');
   const sid=series.data.id;
+  assert.equal((await call('/api/v1/studio/categories/'+sciFi.data.id,'DELETE')).code,409,'Reject deleting category in use');
   const season=await call('/api/v1/studio/seasons','POST',{seriesId:sid,number:1,title:'Primeira temporada',status:'published'});
   assert.equal(season.code,201,'Create season');
   assert.equal((await call('/api/v1/studio/seasons/'+season.data.id,'PUT',

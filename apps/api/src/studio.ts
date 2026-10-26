@@ -4,6 +4,7 @@ import type {RowDataPacket} from "mysql2";
 import {pool} from "./db.js";
 import {requireActor,type Actor} from "./auth.js";
 import {hashPassword,normalizeEmail,validateArtwork} from "./security.js";
+import {categoryExists} from "./categories.js";
 type Row=RowDataPacket & Record<string,any>;
 async function rows(sql:string,values:unknown[]=[]):Promise<Row[]>{
   const [result]=await pool.execute<RowDataPacket[]>(sql,values);
@@ -116,6 +117,7 @@ export function registerStudio(app:FastifyInstance){
       summary=typeof payload.summary==="string"&&payload.summary.length<=10000?payload.summary:null,
       poster=validateArtwork(payload.poster),banner=validateArtwork(payload.banner);
     if(!title||!category||summary===null||!poster||!banner)return fail(reply,400);
+     if(!await categoryExists(category))return reply.code(400).send({error:"unknown_category"});
     const sql="UPDATE series SET title=?,category=?,summary=?,poster=?,banner=?"+(actor.isAdmin?",featured=?":"")+" WHERE id=?";
     const vals=actor.isAdmin?[title,category,summary,poster,banner,Boolean(payload.featured),sid]:[title,category,summary,poster,banner,sid];
     await pool.execute(sql,vals);
