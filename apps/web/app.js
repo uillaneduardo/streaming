@@ -45,7 +45,7 @@ let frontendVersion='checking';
 const localDemo=db;
 let studioData=null,studioUser=null,csrfToken='';
 let studioCategories=[];
-const categoriesList=()=>hosted?studioCategories:[...new Set(db.series.map(x=>x.category))].sort((a,b)=>a.localeCompare(b,'pt-BR')).map(name=>({id:name,name,usageCount:db.series.filter(s=>s.category===name).length}));
+const categoriesList=()=>hosted?studioCategories:[...new Set([...(db.categories||[]),...db.series.map(x=>x.category)])].sort((a,b)=>a.localeCompare(b,'pt-BR')).map(name=>({id:name,name,usageCount:db.series.filter(s=>s.category===name).length}));
 async function apiRequest(url,options={}){
   const write=!!options.method && !['GET','HEAD'].includes(options.method.toUpperCase());
   const headers={'Accept':'application/json',...(options.body?{'Content-Type':'application/json'}:{}),...(write&&csrfToken?{'x-csrf-token':csrfToken}:{}),...(options.headers||{})};
