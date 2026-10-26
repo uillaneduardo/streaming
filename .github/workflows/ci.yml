@@ -99,6 +99,7 @@ jobs:
           docker compose exec -T -e BOOTSTRAP_EMAIL -e BOOTSTRAP_NAME -e BOOTSTRAP_PASSWORD api node dist/bootstrap.js
           node tests/auth-integration.cjs
           node tests/browser-invitations.cjs
+          node tests/browser-editorial.cjs
           unset BOOTSTRAP_EMAIL BOOTSTRAP_NAME BOOTSTRAP_PASSWORD CI_LOGIN_PASSWORD
       - name: Upload invitation browser evidence
         if: always()
@@ -107,7 +108,9 @@ jobs:
           name: m1-browser-invitations
           path: |
             test-results/browser/m1-*.png
+            test-results/browser/m2-*.png
             test-results/browser/FAILED-m1-*.png
+            test-results/browser/FAILED-m2-*.png
           if-no-files-found: ignore
           retention-days: 7
       - name: Verify deleted or edited demo content NEVER reappears after migration
