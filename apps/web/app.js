@@ -72,7 +72,7 @@ const datetimeLocal=value=>{
 const isoFromInput=value=>value?new Date(value).toISOString():null;
 async function refreshPublicCatalog(){
   try{
-    const result=await apiRequest('/api/v1/public/bootstrap');
+    const result=await apiRequest('/api/v1/public/bootstrap',{cache:'no-store'});
     for(const key of ['series','seasons','episodes','banners','homeSections'])if(Array.isArray(result[key]))publicData[key]=result[key];
   }catch(error){console.warn('Catálogo não atualizado',error)}
 }
