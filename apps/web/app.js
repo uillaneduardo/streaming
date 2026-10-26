@@ -722,10 +722,75 @@ if(hosted&&type==='members'){
 if(hosted&&type==='seasons'&&editing)body=body.replace('name="seriesId"','name="seriesId" disabled');
 if(hosted&&type==='episodes'&&editing)body=body.replace('name="seasonId"','name="seasonId" disabled');
 modal((editing?'Editar ':'Adicionar ')+({series:'série',seasons:'temporada',episodes:'episódio',banners:'banner',teams:'equipe',members:'integrante',media:'mídia'}[type]),body)}
+
+const catalogSingular={series:'série',seasons:'temporada',episodes:'episódio'};
+function openCatalogDelete(type,id){
+ const entity=by(type,id);if(!entity)return;
+ const name=entity.title||entity.name||'Item';
+ const deps=type==='series'?db.seasons.filter(s=>s.seriesId===id).length:
+  type==='seasons'?db.episodes.filter(e=>e.seasonId===id).length:0;
+ const label=type==='series'?'temporada(s)':type==='seasons'?'episódio(s)':'';
+ const text=deps?
+  'Este conteúdo possui '+deps+' '+label+'. Exclua os conteúdos vinculados primeiro.':
+  'Esta ação é permanente e não pode ser desfeita.';
+ const next=type==='series'?'catalog-to-seasons':type==='seasons'?'catalog-to-episodes':'';
+ const goId=type==='series'?id:entity.seriesId;
+ const body='<div class="catalog-delete-dialog"><p>Deseja excluir <strong>'+esc(name)+'</strong>?</p>'+
+ '<p class="'+(deps?'catalog-delete-warning':'muted')+'">'+esc(text)+'</p>'+
+ '<div class="row between"><button type="button" class="btn" data-action="close-modal">Cancelar</button>'+
+ (deps?'<button type="button" class="btn" data-action="'+next+'" data-id="'+esc(goId)+'">Ver '+(type==='series'?'temporadas':'episódios')+'</button>':
+ '<button type="button" class="btn primary catalog-confirm-danger" data-action="catalog-confirm-delete" data-type="'+type+
+ '" data-id="'+esc(id)+'">Excluir '+catalogSingular[type]+'</button>')+'</div></div>';
+ modal('Excluir '+catalogSingular[type],body);
+}
+async function deleteCatalogEntity(type,id,button){
+ const endpoints={series:'series',seasons:'seasons',episodes:'episodes'};
+ if(!endpoints[type]||!by(type,id))return;
+ if(button)button.disabled=true;
+ try{
+  await apiRequest('/api/v1/studio/'+endpoints[type]+'/'+encodeURIComponent(id),{method:'DELETE'});
+  await fetchStudioData();
+  await refreshPublicCatalog();
+  document.getElementById('modal-root').innerHTML='';
+  render();toast('Conteúdo excluído.');
+ }catch(error){
+  const messages={series_has_seasons:'Exclua primeiro as temporadas desta série.',
+   series_has_banners:'A série está vinculada a banners. Remova os banners antes.',
+   season_has_episodes:'Exclua primeiro os episódios desta temporada.',
+   publish_denied:'Você não tem permissão para excluir conteúdo publicado.',
+   forbidden:'Você não tem permissão para excluir este conteúdo.'};
+  toast(messages[error.message]||error.message||'Não foi possível excluir.');
+  if(button)button.disabled=false;
+ }
+}
+
 function formSubmit(form){const type=form.dataset.form;if(!type)return;
 if(hosted){if(['series','seasons','episodes','teams','members','banners'].includes(type)){void saveRemoteEntity(form);}else toast('Esta operação ainda não está habilitada.');return;}
 const f=new FormData(form),v=Object.fromEntries(f.entries());if(type==='episodes'&&v.endAt&&v.releaseAt&&new Date(v.endAt)<=new Date(v.releaseAt)){toast('O término precisa ser posterior à estreia.');return}if(type==='banners'&&v.endAt&&v.startAt&&new Date(v.endAt)<=new Date(v.startAt)){toast('O fim da campanha precisa ser posterior ao início.');return}if(type==='series'){v.slug=slug(v.title);v.teamIds=f.getAll('teamIds');v.featured=f.has('featured')}if(type==='banners'){v.active=f.has('active');v.order=Number(v.order)||1}if(type==='episodes'){v.number=Number(v.number);v.duration=Number(v.duration);v.status=v.status||'scheduled'}if(type==='seasons')v.number=Number(v.number);if(type==='series'&&!v.teamIds.length){toast('Selecione uma equipe responsável.');return}const old=form.dataset.id&&by(type,form.dataset.id);if(old)Object.assign(old,v);else db[type].push({id:id(type[0]),...v});save();document.getElementById('modal-root').innerHTML='';render();toast('Alterações salvas nesta demonstração.')}
 function handle(action,el){const eid=el.dataset.id;
+if(action==='catalog-clear'){
+ const type=el.dataset.type;if(!catalogFilters[type])return;
+ for(const key of Object.keys(catalogFilters[type]))catalogFilters[type][key]=key==='query'?'':'all';
+ render();return;
+}
+if(action==='catalog-to-seasons'){
+ catalogFilters.seasons.seriesId=eid;
+ document.getElementById('modal-root').innerHTML='';
+ nav('/studio/seasons');return;
+}
+if(action==='catalog-to-episodes'){
+ catalogFilters.episodes.seriesId=eid;
+ document.getElementById('modal-root').innerHTML='';
+ nav('/studio/episodes');return;
+}
+if(action==='catalog-confirm-delete'){void deleteCatalogEntity(el.dataset.type,eid,el);return}
+if(action.startsWith('delete-')&&['series','season','episode'].includes(action.slice(7))){
+ const type={series:'series',season:'seasons',episode:'episodes'}[action.slice(7)];
+ if(hosted)openCatalogDelete(type,eid);
+ else{toast('A exclusão está disponível no Studio.');}
+ return;
+}
+
 if(action==='player-toggle'){toggleYouTubePlayback();return}
 if(action==='retry-public'){window.location.reload();return}
 if(action==='settings-jump'){document.getElementById(el.dataset.target)?.scrollIntoView({behavior:'smooth',block:'start'});return}
@@ -788,6 +853,13 @@ if(e.target.id==='upload-settings-form'){
 if(e.target.id==='studio-login'){void loginStudio(e.target);return;}
 if(hosted&&e.target.id==='settings-form'){void saveRemoteSettings(e.target);return;}
 if(e.target.id==='settings-form'){const f=new FormData(e.target);db.preferences={siteName:f.get('siteName'),siteDescription:f.get('siteDescription'),autoplay:f.has('autoplay')};save();toast('Preferências salvas.')}else formSubmit(e.target)});document.addEventListener('change',e=>{
+if(e.target.matches('[data-catalog-filter]')){
+ const type=e.target.closest('[data-catalog-type]')?.dataset.catalogType;
+ if(type&&catalogFilters[type]){
+  catalogFilters[type][e.target.dataset.catalogFilter]=e.target.value;
+  refreshCatalogTable(type);
+ }return;
+}
 if(e.target.id==='media-kind-filter'){mediaFilter=e.target.value;refreshMediaResults();return}
 if(e.target.id==='media-tag-filter'){mediaTagFilter=e.target.value;refreshMediaResults();return}
 if(e.target.id==='media-picker-kind'){updateMediaPicker();return}
@@ -821,6 +893,11 @@ document.addEventListener('drop',e=>{
   }
 });
 document.addEventListener('input',e=>{
+if(e.target.matches('[data-catalog-search]')){
+ const type=e.target.dataset.catalogSearch;
+ if(catalogFilters[type]){catalogFilters[type].query=e.target.value;refreshCatalogTable(type);}
+ return;
+}
 if(e.target.id==='media-search'){mediaSearch=e.target.value;refreshMediaResults();return}
 if(e.target.id==='media-picker-search'){updateMediaPicker();return}
 if(e.target.matches('.media-manual-url input[name]')){updateInlineMediaField(e.target.name,e.target.value);return;}
