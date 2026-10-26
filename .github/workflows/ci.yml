@@ -74,6 +74,20 @@ jobs:
       - name: Verify public catalogue and embargo
         run: |
           node -e "fetch('http://localhost:8088/api/v1/public/bootstrap').then(r=>r.json()).then(d=>{if(d.series.length!==5||d.episodes.length!==10)throw Error('unexpected fixture count');const x=d.episodes.find(e=>e.id==='e3');if(!x||x.availability!=='upcoming'||x.youtube)throw Error('embargo leak')}).catch(e=>{console.error(e);process.exit(1)})"
+      - name: Install Chromium for desktop/mobile acceptance
+        run: |
+          npm install --no-save --package-lock=false playwright@1.56.1 --no-audit --no-fund
+          npx playwright install --with-deps chromium
+      - name: Browser acceptance — file:// and Nginx (desktop/mobile)
+        run: node tests/browser-m0.cjs
+      - name: Upload M0 browser screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m0-browser-acceptance
+          path: test-results/browser/
+          if-no-files-found: ignore
+          retention-days: 7
       - name: Verify Studio authentication and scoped edits
         run: |
           export CI_LOGIN_EMAIL="ci-owner@example.test"
