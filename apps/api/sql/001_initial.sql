@@ -1,4 +1,4 @@
--- CenaLivre M0/M1: schema inicial idempotente; dados fictícios, nenhum conteúdo privado real.
+-- CenaLivre M0/M1: schema-only migration. NEVER insert example content in production migrations.
 CREATE TABLE IF NOT EXISTS teams (id VARCHAR(36) PRIMARY KEY,name VARCHAR(160) NOT NULL,description TEXT NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 CREATE TABLE IF NOT EXISTS series (id VARCHAR(36) PRIMARY KEY,title VARCHAR(180) NOT NULL,slug VARCHAR(180) NOT NULL UNIQUE,category VARCHAR(100) NOT NULL,summary TEXT NOT NULL,poster VARCHAR(512) NULL,banner VARCHAR(512) NULL,featured BOOLEAN NOT NULL DEFAULT FALSE,visibility ENUM('draft','public','suspended') NOT NULL DEFAULT 'draft',INDEX idx_visibility(visibility)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 CREATE TABLE IF NOT EXISTS series_teams (series_id VARCHAR(36) NOT NULL,team_id VARCHAR(36) NOT NULL,PRIMARY KEY(series_id,team_id),FOREIGN KEY(series_id) REFERENCES series(id),FOREIGN KEY(team_id) REFERENCES teams(id)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -6,39 +6,3 @@ CREATE TABLE IF NOT EXISTS seasons (id VARCHAR(36) PRIMARY KEY,series_id VARCHAR
 CREATE TABLE IF NOT EXISTS episodes (id VARCHAR(36) PRIMARY KEY,season_id VARCHAR(36) NOT NULL,number INT NOT NULL,title VARCHAR(180) NOT NULL,summary TEXT NOT NULL,youtube_id VARCHAR(11) NULL,thumbnail VARCHAR(512) NULL,release_at DATETIME(3) NULL,end_at DATETIME(3) NULL,status ENUM('draft','scheduled','published','suspended') NOT NULL DEFAULT 'draft',duration INT NOT NULL DEFAULT 0,UNIQUE KEY uq_episode_number(season_id,number),INDEX idx_release(release_at,status),FOREIGN KEY(season_id) REFERENCES seasons(id)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 CREATE TABLE IF NOT EXISTS banners (id VARCHAR(36) PRIMARY KEY,title VARCHAR(180) NOT NULL,subtitle TEXT NOT NULL,image VARCHAR(512) NOT NULL,mobile_image VARCHAR(512) NULL,target_series_id VARCHAR(36) NULL,start_at DATETIME(3) NULL,end_at DATETIME(3) NULL,active BOOLEAN NOT NULL DEFAULT TRUE,display_order INT NOT NULL DEFAULT 0,FOREIGN KEY(target_series_id) REFERENCES series(id)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 CREATE TABLE IF NOT EXISTS home_sections (id VARCHAR(36) PRIMARY KEY,title VARCHAR(160) NOT NULL,kind VARCHAR(40) NOT NULL,active BOOLEAN NOT NULL DEFAULT TRUE,display_order INT NOT NULL DEFAULT 0) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-INSERT IGNORE INTO teams(id,name,description) VALUES ('t1','Coletivo Aurora','Narrativas e documentários');
-INSERT IGNORE INTO teams(id,name,description) VALUES ('t2','Núcleo Prisma','Tecnologia e ciência');
-INSERT IGNORE INTO teams(id,name,description) VALUES ('t3','Maré Criativa','Natureza e aventura');
-INSERT IGNORE INTO series(id,title,slug,category,summary,poster,banner,featured,visibility) VALUES ('s1','Além da Órbita','alem-da-orbita','Ficção científica','Em uma missão de exploração, uma tripulação descobre sinais que podem mudar tudo o que sabemos sobre o universo.','assets/orbital-poster.svg','assets/orbital-banner.svg',1,'public');
-INSERT IGNORE INTO series(id,title,slug,category,summary,poster,banner,featured,visibility) VALUES ('s2','Código Aberto','codigo-aberto','Tecnologia','Histórias de pessoas que transformam ideias em tecnologias capazes de alterar nosso cotidiano.','assets/atlas-poster.svg','assets/atlas-banner.svg',0,'public');
-INSERT IGNORE INTO series(id,title,slug,category,summary,poster,banner,featured,visibility) VALUES ('s3','Marés do Brasil','mares-do-brasil','Documentário','Uma jornada por comunidades costeiras, paisagens e histórias que vivem ao ritmo do oceano.','assets/mares-poster.svg','assets/mares-banner.svg',0,'public');
-INSERT IGNORE INTO series(id,title,slug,category,summary,poster,banner,featured,visibility) VALUES ('s4','Lendas de Ontem','lendas-de-ontem','Suspense','Contos populares reinventados em narrativas contemporâneas de mistério.','assets/lendas-poster.svg','assets/lendas-banner.svg',0,'public');
-INSERT IGNORE INTO series(id,title,slug,category,summary,poster,banner,featured,visibility) VALUES ('s5','Cidade Invisível','cidade-invisivel','Drama','Retratos íntimos de histórias e encontros que acontecem enquanto a cidade dorme.','assets/cidade-poster.svg','assets/cidade-banner.svg',0,'public');
-INSERT IGNORE INTO series_teams(series_id,team_id) VALUES ('s1','t1');
-INSERT IGNORE INTO series_teams(series_id,team_id) VALUES ('s1','t2');
-INSERT IGNORE INTO series_teams(series_id,team_id) VALUES ('s2','t2');
-INSERT IGNORE INTO series_teams(series_id,team_id) VALUES ('s3','t3');
-INSERT IGNORE INTO series_teams(series_id,team_id) VALUES ('s4','t1');
-INSERT IGNORE INTO series_teams(series_id,team_id) VALUES ('s5','t1');
-INSERT IGNORE INTO seasons(id,series_id,number,title) VALUES ('se1','s1',1,'Primeiros sinais');
-INSERT IGNORE INTO seasons(id,series_id,number,title) VALUES ('se2','s1',2,'Além do silêncio');
-INSERT IGNORE INTO seasons(id,series_id,number,title) VALUES ('se3','s2',1,'As ideias');
-INSERT IGNORE INTO seasons(id,series_id,number,title) VALUES ('se4','s3',1,'Costa viva');
-INSERT IGNORE INTO seasons(id,series_id,number,title) VALUES ('se5','s4',1,'Mitos urbanos');
-INSERT IGNORE INTO seasons(id,series_id,number,title) VALUES ('se6','s5',1,'Noite adentro');
-INSERT IGNORE INTO episodes(id,season_id,number,title,summary,thumbnail,release_at,end_at,status,duration) VALUES ('e1','se1',1,'O chamado','A primeira mensagem chega à estação orbital.','assets/orbital-banner.svg','2026-10-13 12:00:00',NULL,'published',24);
-INSERT IGNORE INTO episodes(id,season_id,number,title,summary,thumbnail,release_at,end_at,status,duration) VALUES ('e2','se1',2,'O sinal','Uma anomalia muda o rumo da expedição.','assets/episode-04.svg','2026-10-20 12:00:00',NULL,'published',28);
-INSERT IGNORE INTO episodes(id,season_id,number,title,summary,thumbnail,release_at,end_at,status,duration) VALUES ('e3','se1',3,'Primeiro contato','A tripulação tenta decifrar uma origem desconhecida.','assets/episode-05.svg','2026-11-01 12:00:00',NULL,'scheduled',31);
-INSERT IGNORE INTO episodes(id,season_id,number,title,summary,thumbnail,release_at,end_at,status,duration) VALUES ('e4','se1',4,'Horizonte de eventos','Uma escolha pode mudar para sempre a missão.','assets/episode-06.svg','2026-11-08 12:00:00',NULL,'scheduled',27);
-INSERT IGNORE INTO episodes(id,season_id,number,title,summary,thumbnail,release_at,end_at,status,duration) VALUES ('e5','se2',1,'O retorno','Novos caminhos se abrem.','assets/episode-07.svg','2026-11-15 12:00:00',NULL,'scheduled',33);
-INSERT IGNORE INTO episodes(id,season_id,number,title,summary,thumbnail,release_at,end_at,status,duration) VALUES ('e6','se3',1,'Quem escreve o futuro?','Conversas sobre criação, pesquisa e inovação.','assets/atlas-banner.svg','2026-10-17 12:00:00',NULL,'published',19);
-INSERT IGNORE INTO episodes(id,season_id,number,title,summary,thumbnail,release_at,end_at,status,duration) VALUES ('e7','se3',2,'Os bastidores da internet','Uma viagem pelas redes que conectam pessoas.','assets/episode-08.svg','2026-11-03 12:00:00',NULL,'scheduled',22);
-INSERT IGNORE INTO episodes(id,season_id,number,title,summary,thumbnail,release_at,end_at,status,duration) VALUES ('e8','se4',1,'Onde a maré começa','Pessoas e paisagens que contam histórias do litoral.','assets/mares-banner.svg','2026-10-09 12:00:00',NULL,'published',29);
-INSERT IGNORE INTO episodes(id,season_id,number,title,summary,thumbnail,release_at,end_at,status,duration) VALUES ('e9','se5',1,'O último visitante','Uma história que ninguém conseguiu explicar.','assets/lendas-banner.svg','2026-10-22 12:00:00',NULL,'published',18);
-INSERT IGNORE INTO episodes(id,season_id,number,title,summary,thumbnail,release_at,end_at,status,duration) VALUES ('e10','se6',1,'Depois das luzes','A cidade revela sua outra face.','assets/cidade-banner.svg','2026-11-10 12:00:00',NULL,'scheduled',26);
-INSERT IGNORE INTO banners(id,title,subtitle,image,target_series_id,start_at,active,display_order) VALUES ('b1','Nova temporada: Além da Órbita','Explore novos mundos na nossa série em destaque.','assets/orbital-banner.svg','s1','2026-10-20 12:00:00',TRUE,1);
-INSERT IGNORE INTO banners(id,title,subtitle,image,target_series_id,start_at,active,display_order) VALUES ('b2','Marés do Brasil','Histórias reais à beira do oceano.','assets/mares-banner.svg','s3','2026-11-04 12:00:00',TRUE,2);
-INSERT IGNORE INTO home_sections(id,title,kind,active,display_order) VALUES ('hs1','Em destaque','featured',TRUE,1);
-INSERT IGNORE INTO home_sections(id,title,kind,active,display_order) VALUES ('hs2','Últimos lançamentos','latest',TRUE,2);
-INSERT IGNORE INTO home_sections(id,title,kind,active,display_order) VALUES ('hs3','Próximas estreias','upcoming',TRUE,3);
-INSERT IGNORE INTO home_sections(id,title,kind,active,display_order) VALUES ('hs4','Todas as séries','all',TRUE,4);
