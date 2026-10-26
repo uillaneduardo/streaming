@@ -149,6 +149,29 @@ export function registerMedia(app:FastifyInstance){
   await unlink(path.join(storage,String(assets[0].storage_name))).catch(()=>{});
   await audit(user.id,"media.deleted",req.params.id);return {ok:true};
  });
+ app.put<{Params:{id:string};Body:Buffer}>("/api/v1/studio/media/:id/file",{bodyLimit:MAX_BYTES},async(req,reply)=>{
+  const user=await requireActor(req,reply,true);if(!user)return;
+  if(!safeId(req.params.id))return error(reply,400,"invalid_id");
+  const existing=await list("SELECT * FROM media_assets WHERE id=?",[req.params.id]);
+  if(!existing.length)return error(reply,404,"not_found");
+  const current=existing[0];
+  if(!await access(user,current.team_id,true))return error(reply,403,"forbidden");
+  const binary=req.body;
+  if(!Buffer.isBuffer(binary)||!binary.length)return error(reply,400,"invalid_file");
+  const policy=await uploadOptions(),kind=signature(binary);
+  if(!kind||!policy.allowedTypes.includes(kind.type))return error(reply,415,"unsupported_file_format");
+  if(binary.length>policy.maxFileMb*1024*1024)return error(reply,413,"file_too_large");
+  const filename=randomUUID()+"."+kind.ext,target=path.join(storage,filename);
+  await mkdir(storage,{recursive:true});
+  await writeFile(target,binary,{flag:"wx",mode:0o644});
+  try{
+    await pool.execute("UPDATE media_assets SET mime_type=?,byte_size=?,sha256=?,storage_name=? WHERE id=?",
+      [kind.mime,binary.length,createHash("sha256").update(binary).digest("hex"),filename,req.params.id]);
+  }catch(e){await unlink(target).catch(()=>{});throw e;}
+  await unlink(path.join(storage,String(current.storage_name))).catch(()=>{});
+  await audit(user.id,"media.replaced",req.params.id);
+  return {ok:true,url:"/api/v1/media/files/"+req.params.id};
+ });
  app.get<{Params:{id:string};Querystring:{download?:string}}>("/api/v1/media/files/:id",async(req,reply)=>{
   if(!safeId(req.params.id))return error(reply,404,"not_found");
   const assets=await list("SELECT * FROM media_assets WHERE id=?",[req.params.id]);
