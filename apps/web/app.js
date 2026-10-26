@@ -509,9 +509,138 @@ function studioFrame(content){return `<div class="admin">${side()}<div class="ad
 function pageHead(title,subtitle,actions=''){return `<div class="pagehead"><div><h1>${title}</h1><p>${subtitle}</p></div><div class="row">${actions}</div></div>`}
 function stat(n,label){return `<div class="panel"><div class="stat-label">${label}</div><div class="stat-value">${n}</div></div>`}
 function dashboard(){const coming=db.episodes.filter(x=>state(x)==='Em breve').sort((a,b)=>new Date(a.releaseAt)-new Date(b.releaseAt));return pageHead('Visão geral','Acompanhe o catálogo e os próximos lançamentos.',`<button class="btn primary" data-action="create-series">+ Nova série</button>`)+`<div class="stat-grid">${stat(db.series.length,'Séries cadastradas')}${stat(db.episodes.length,'Episódios')}${stat(coming.length,'Estreias programadas')}${stat(db.teams.length,'Equipes')}</div><div class="two-column"><section class="panel"><h2>Próximas estreias</h2>${coming.length?coming.slice(0,6).map(x=>`<div class="schedule-line"><div class="smallcaps" style="color:#b25d4d">${dt(x.releaseAt)}</div><strong>${esc(seriesForEpisode(x)?.title)} · ${esc(x.title)}</strong><div class="muted tiny">T${by('seasons',x.seasonId)?.number}:E${x.number}</div></div>`).join(''):'<p class="muted">Nenhuma estreia agendada.</p>'}<button class="btn small" data-action="route" data-path="/studio/schedule">Abrir calendário</button></section><section class="panel"><h2>Produções em destaque</h2>${db.series.slice(0,4).map(s=>`<div class="item-card"><img src="${esc(s.banner)}" alt=""><div class="item-info"><h3>${esc(s.title)}</h3><p>${esc(s.category)} · ${epOrder(s.id).length} episódio(s)</p></div><button class="btn small" data-action="edit-series" data-id="${s.id}">Editar</button></div>`).join('')}</section></div>`}
-function seriesAdmin(){return pageHead('Séries','Cadastre e administre as produções das equipes.',`<button class="btn primary" data-action="create-series">+ Nova série</button>`)+`<div class="panel"><table class="data-table"><thead><tr><th>Produção</th><th>Categoria</th><th>Equipe(s)</th><th>Episódios</th><th></th></tr></thead><tbody>${db.series.map(s=>`<tr><td><div class="row"><img src="${esc(s.poster)}" style="width:40px;height:55px;object-fit:cover;border-radius:5px" alt=""><strong>${esc(s.title)}</strong></div></td><td>${esc(s.category)}</td><td>${s.teamIds.map(t=>esc(by('teams',t)?.name)).join(', ')}</td><td>${epOrder(s.id).length}</td><td><button class="btn small" data-action="edit-series" data-id="${s.id}">Editar</button> <button class="btn small" data-action="route" data-path="/serie/${s.id}">Visualizar ↗</button></td></tr>`).join('')}</tbody></table></div>`}
-function seasonsAdmin(){return pageHead('Temporadas','Organização narrativa por série.',`<button class="btn primary" data-action="create-season">+ Nova temporada</button>`)+`<div class="panel"><table class="data-table"><thead><tr><th>Série</th><th>Temporada</th><th>Nome</th><th>Episódios</th><th></th></tr></thead><tbody>${db.seasons.map(s=>`<tr><td>${esc(by('series',s.seriesId)?.title)}</td><td>${s.number}</td><td>${esc(s.title)}</td><td>${eps(s.id).length}</td><td><button class="btn small" data-action="edit-season" data-id="${s.id}">Editar</button></td></tr>`).join('')}</tbody></table></div>`}
-function episodesAdmin(){return pageHead('Episódios','Controle de vídeos, thumbnails e datas de exibição.',`<button class="btn primary" data-action="create-episode">+ Novo episódio</button>`)+`<div class="panel"><table class="data-table"><thead><tr><th>Nome</th><th>Série</th><th>Disponibilidade</th><th>Estreia</th><th></th></tr></thead><tbody>${db.episodes.map(e=>`<tr><td><strong>T${by('seasons',e.seasonId)?.number}:E${e.number} · ${esc(e.title)}</strong></td><td>${esc(seriesForEpisode(e)?.title)}</td><td><span class="badge ${playable(e)?'green':state(e)==='Em breve'?'orange':'blue'}">${state(e)}</span></td><td>${dt(e.releaseAt)}</td><td><button class="btn small" data-action="edit-episode" data-id="${e.id}">Editar</button></td></tr>`).join('')}</tbody></table></div>`}
+
+const catalogFilters={
+ series:{query:'',category:'all',visibility:'all'},
+ seasons:{query:'',seriesId:'all'},
+ episodes:{query:'',seriesId:'all',status:'all'}
+};
+function catalogMatches(value,query){
+ return String(value||'').toLocaleLowerCase('pt-BR').includes(query.trim().toLocaleLowerCase('pt-BR'));
+}
+function catalogItems(type){
+ const filter=catalogFilters[type];
+ if(type==='series'){
+  return [...db.series].filter(s=>
+   (filter.category==='all'||s.category===filter.category)&&
+   (filter.visibility==='all'||(s.visibility||'draft')===filter.visibility)&&
+   catalogMatches([s.title,s.category,s.summary,s.teamIds.map(id=>by('teams',id)?.name).join(' ')].join(' '),filter.query)
+  ).sort((a,b)=>a.title.localeCompare(b.title,'pt-BR'));
+ }
+ if(type==='seasons'){
+  return [...db.seasons].filter(s=>(filter.seriesId==='all'||s.seriesId===filter.seriesId)&&
+   catalogMatches([s.title,s.number,by('series',s.seriesId)?.title].join(' '),filter.query)
+  ).sort((a,b)=>String(by('series',a.seriesId)?.title||'').localeCompare(String(by('series',b.seriesId)?.title||''),'pt-BR')||a.number-b.number);
+ }
+ return [...db.episodes].filter(e=>{
+  const parent=by('seasons',e.seasonId),production=parent&&by('series',parent.seriesId);
+  return (filter.seriesId==='all'||parent?.seriesId===filter.seriesId)&&
+   (filter.status==='all'||e.status===filter.status)&&
+   catalogMatches([e.title,e.number,e.summary,production?.title,parent?.title].join(' '),filter.query);
+ }).sort((a,b)=>{
+  const aSeason=by('seasons',a.seasonId),bSeason=by('seasons',b.seasonId);
+  return String(by('series',aSeason?.seriesId)?.title||'').localeCompare(String(by('series',bSeason?.seriesId)?.title||''),'pt-BR')||
+   Number(aSeason?.number||0)-Number(bSeason?.number||0)||a.number-b.number;
+ });
+}
+const catalogSelect=(label,key,options,chosen)=>
+ '<label class="catalog-filter"><span>'+esc(label)+'</span><select class="select" data-catalog-filter="'+key+'">'+
+ options.map(o=>'<option value="'+esc(o.id)+'" '+(o.id===chosen?'selected':'')+'>'+esc(o.name||o.title)+'</option>').join('')+
+ '</select></label>';
+function catalogToolbar(type){
+ const filter=catalogFilters[type];
+ const categories=[...new Set(db.series.map(s=>s.category))].sort((a,b)=>a.localeCompare(b,'pt-BR'));
+ const categoryOptions=[{id:'all',name:'Todas as categorias'},...categories.map(v=>({id:v,name:v}))];
+ const seriesOptions=[{id:'all',name:'Todas as séries'},...db.series.map(s=>({id:s.id,name:s.title})).sort((a,b)=>a.name.localeCompare(b.name,'pt-BR'))];
+ const statusOptions=[{id:'all',name:'Todos os estados'},...[
+  ['draft','Rascunho'],['scheduled','Agendado'],['published','Publicado'],['suspended','Suspenso']
+ ].map(([id,name])=>({id,name}))];
+ const visibilityOptions=[{id:'all',name:'Todas as visibilidades'},{id:'draft',name:'Rascunho'},
+  {id:'public',name:'Pública'},{id:'suspended',name:'Suspensa'}];
+ return '<div class="catalog-toolbar" data-catalog-type="'+type+'">'+
+  '<label class="catalog-search"><span>Pesquisar</span><input class="input" type="search" data-catalog-search="'+type+'" placeholder="'+
+   (type==='series'?'Buscar por título, categoria ou equipe':type==='seasons'?'Buscar temporada ou série':'Buscar episódio, série ou temporada')+
+   '" value="'+esc(filter.query)+'" autocomplete="off"></label>'+
+  (type==='series'?catalogSelect('Categoria','category',categoryOptions,filter.category)+catalogSelect('Visibilidade','visibility',visibilityOptions,filter.visibility):
+   type==='seasons'?catalogSelect('Série','seriesId',seriesOptions,filter.seriesId):
+    catalogSelect('Série','seriesId',seriesOptions,filter.seriesId)+catalogSelect('Estado','status',statusOptions,filter.status))+
+  '<button class="btn small catalog-clear" data-action="catalog-clear" data-type="'+type+'" type="button">Limpar filtros</button></div>';
+}
+function catalogEmpty(type){
+ const filter=catalogFilters[type],filtered=filter.query||Object.entries(filter).some(([key,value])=>key!=='query'&&value!=='all');
+ const messages={series:'Nenhuma série cadastrada.',seasons:'Nenhuma temporada cadastrada.',episodes:'Nenhum episódio cadastrado.'};
+ const create={series:'create-series',seasons:'create-season',episodes:'create-episode'};
+ return '<tr><td colspan="'+(type==='episodes'?5:5)+'"><div class="catalog-empty"><strong>'+
+ (filtered?'Nenhum resultado encontrado.':messages[type])+'</strong>'+
+ '<p>'+(filtered?'Altere os filtros ou faça uma nova busca.':'Comece criando um novo conteúdo.')+'</p>'+
+ (filtered?'<button type="button" class="btn small" data-action="catalog-clear" data-type="'+type+'">Limpar filtros</button>':
+ '<button type="button" class="btn small primary" data-action="'+create[type]+'">Criar agora</button>')+
+ '</div></td></tr>';
+}
+function catalogRows(type){
+ const items=catalogItems(type);
+ if(!items.length)return catalogEmpty(type);
+ if(type==='series')return items.map(s=>{
+  const count=db.seasons.filter(t=>t.seriesId===s.id).length;
+  const epCount=db.episodes.filter(e=>by('seasons',e.seasonId)?.seriesId===s.id).length;
+  const visibility=s.visibility||'draft';
+  const badge=visibility==='public'?'Pública':visibility==='suspended'?'Suspensa':'Rascunho';
+  return '<tr><td><div class="catalog-title"><img src="'+esc(s.poster||'')+'" alt="" loading="lazy">'+
+   '<div><strong>'+esc(s.title)+'</strong><div class="muted tiny">'+esc(s.category)+'</div></div></div></td>'+
+   '<td><span class="badge '+(visibility==='public'?'green':visibility==='suspended'?'orange':'blue')+'">'+badge+'</span></td>'+
+   '<td class="catalog-wrap">'+esc((s.teamIds||[]).map(id=>by('teams',id)?.name).filter(Boolean).join(', ')||'Sem equipe')+'</td>'+
+   '<td><button class="btn small catalog-count" data-action="catalog-to-seasons" data-id="'+esc(s.id)+'">'+count+' temp. · '+epCount+' ep.</button></td>'+
+   '<td class="catalog-row-actions"><button class="btn small" data-action="edit-series" data-id="'+esc(s.id)+'">Editar</button>'+
+   '<button class="btn small catalog-delete" data-action="delete-series" data-id="'+esc(s.id)+'">Excluir</button></td></tr>';
+ }).join('');
+ if(type==='seasons')return items.map(season=>{
+  const production=by('series',season.seriesId),number=db.episodes.filter(e=>e.seasonId===season.id).length;
+  return '<tr><td><strong>'+esc(production?.title||'Série indisponível')+'</strong></td>'+
+   '<td><span class="catalog-number">'+season.number+'</span></td>'+
+   '<td>'+esc(season.title)+'</td>'+
+   '<td><button class="btn small catalog-count" data-action="catalog-to-episodes" data-id="'+esc(season.seriesId)+'">'+number+' episódios</button></td>'+
+   '<td class="catalog-row-actions"><button class="btn small" data-action="edit-season" data-id="'+esc(season.id)+'">Editar</button>'+
+   '<button class="btn small catalog-delete" data-action="delete-season" data-id="'+esc(season.id)+'">Excluir</button></td></tr>';
+ }).join('');
+ return items.map(e=>{
+  const season=by('seasons',e.seasonId),production=seriesForEpisode(e);
+  const stateLabel=e.status==='published'?'Publicado':e.status==='scheduled'?'Agendado':e.status==='suspended'?'Suspenso':'Rascunho';
+  return '<tr><td><div class="catalog-title"><img src="'+esc(e.thumbnail||'')+'" alt="" loading="lazy">'+
+   '<div><strong>'+esc(e.title)+'</strong><div class="muted tiny">T'+(season?.number||'?')+':E'+e.number+'</div></div></div></td>'+
+   '<td class="catalog-wrap">'+esc(production?.title||'Série indisponível')+'</td>'+
+   '<td><span class="badge '+(e.status==='published'?'green':e.status==='scheduled'?'orange':'blue')+'">'+stateLabel+'</span></td>'+
+   '<td>'+esc(e.releaseAt?dt(e.releaseAt):'Sem data')+'</td>'+
+   '<td class="catalog-row-actions"><button class="btn small" data-action="edit-episode" data-id="'+esc(e.id)+'">Editar</button>'+
+   '<button class="btn small catalog-delete" data-action="delete-episode" data-id="'+esc(e.id)+'">Excluir</button></td></tr>';
+ }).join('');
+}
+function refreshCatalogTable(type){
+ const table=document.querySelector('[data-catalog-table="'+type+'"]');
+ if(!table)return;
+ const tbody=table.querySelector('tbody');
+ if(tbody)tbody.innerHTML=catalogRows(type);
+ const count=document.querySelector('[data-catalog-count="'+type+'"]');
+ if(count)count.textContent=catalogItems(type).length+' de '+
+  (type==='series'?db.series:type==='seasons'?db.seasons:db.episodes).length+' itens';
+}
+function catalogPage(type){
+ const titles={series:'Séries',seasons:'Temporadas',episodes:'Episódios'};
+ const createLabels={series:'Nova série',seasons:'Nova temporada',episodes:'Novo episódio'};
+ const createActions={series:'create-series',seasons:'create-season',episodes:'create-episode'};
+ const columns={series:['Série','Visibilidade','Equipes','Conteúdo','Ações'],
+  seasons:['Série','Nº','Temporada','Episódios','Ações'],
+  episodes:['Episódio','Série','Estado','Estreia','Ações']};
+ return pageHead(titles[type],'', '<button class="btn primary" data-action="'+createActions[type]+'">+ '+createLabels[type]+'</button>')+
+ '<section class="panel catalog-manager">'+catalogToolbar(type)+
+ '<div class="row between catalog-results"><span data-catalog-count="'+type+'">'+catalogItems(type).length+' de '+
+ (type==='series'?db.series:type==='seasons'?db.seasons:db.episodes).length+' itens</span></div>'+
+ '<div class="catalog-table-scroll"><table class="data-table catalog-table" data-catalog-table="'+type+'"><thead><tr>'+
+ columns[type].map(c=>'<th>'+c+'</th>').join('')+
+ '</tr></thead><tbody>'+catalogRows(type)+'</tbody></table></div></section>';
+}
+function seriesAdmin(){return catalogPage('series')}
+function seasonsAdmin(){return catalogPage('seasons')}
+function episodesAdmin(){return catalogPage('episodes')}
 function mediaAdmin(){
  const allTags=[...new Set(mediaData.assets.flatMap(a=>a.tags))].sort();
  return pageHead('Biblioteca de mídia','Upload, organização, tags e seleção para séries, episódios e banners.',
