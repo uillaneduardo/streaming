@@ -213,23 +213,57 @@ export function registerStudioManagement(app:FastifyInstance) {
     await audit(actor.id,"episode.updated","episode",id);
     return {ok:true};
   });
+  const bannerData=(body:Obj)=>{
+    const title=txt(body.title,180),subtitle=typeof body.subtitle==="string"&&body.subtitle.length<=10000?body.subtitle:null;
+    const image=safePath(body.image),mobile=body.mobileImage?safePath(body.mobileImage):null;
+    const target=body.target,order=integer(body.order,1,10000),start=dateParam(body.startAt),end=dateParam(body.endAt);
+    if(!title||subtitle===null||!image||(body.mobileImage&&!mobile)||!goodId(target)||order===null||
+       start===undefined||end===undefined||(start&&end&&end<=start)||typeof body.active!=="boolean")return null;
+    return {title,subtitle,image,mobile,target,order,start,end,active:body.active};
+  };
+  app.post<{Body:Obj}>("/api/v1/studio/banners",async(req,reply)=>{
+    const user=await requireActor(req,reply,true);if(!user)return;
+    if(!user.isAdmin)return err(reply,403,"forbidden");
+    const b=bannerData(req.body||{});if(!b)return err(reply,400,"invalid_banner");
+    if(!(await records("SELECT id FROM series WHERE id=?",[b.target])).length)return err(reply,404,"series_not_found");
+    const id=randomUUID();
+    await pool.execute("INSERT INTO banners(id,title,subtitle,image,mobile_image,target_series_id,start_at,end_at,active,display_order) VALUES(?,?,?,?,?,?,?,?,?,?)",
+      [id,b.title,b.subtitle,b.image,b.mobile,b.target,b.start,b.end,b.active,b.order]);
+    await audit(user.id,"banner.created","banner",id);
+    return reply.code(201).send({id});
+  });
+  app.put<{Params:{id:string};Body:Obj}>("/api/v1/studio/banners/:id",async(req,reply)=>{
+    const user=await requireActor(req,reply,true);if(!user)return;
+    if(!user.isAdmin)return err(reply,403,"forbidden");
+    if(!goodId(req.params.id))return err(reply,400,"invalid_id");
+    const b=bannerData(req.body||{});if(!b)return err(reply,400,"invalid_banner");
+    if(!(await records("SELECT id FROM banners WHERE id=?",[req.params.id])).length)return err(reply,404,"banner_not_found");
+    if(!(await records("SELECT id FROM series WHERE id=?",[b.target])).length)return err(reply,404,"series_not_found");
+    await pool.execute("UPDATE banners SET title=?,subtitle=?,image=?,mobile_image=?,target_series_id=?,start_at=?,end_at=?,active=?,display_order=? WHERE id=?",
+      [b.title,b.subtitle,b.image,b.mobile,b.target,b.start,b.end,b.active,b.order,req.params.id]);
+    await audit(user.id,"banner.updated","banner",req.params.id);
+    return {ok:true};
+  });
   app.get("/api/v1/studio/settings",async(req,reply)=>{
     const actor=await requireActor(req,reply);if(!actor)return;
     if(!actor.isAdmin)return err(reply,403,"forbidden");
-    const settings=await records("SELECT site_name,site_description,autoplay,contact_email FROM settings WHERE id=1");
+    const settings=await records("SELECT site_name,site_description,autoplay,contact_email,logo_url,icon_url FROM settings WHERE id=1");
     return settings.length?{
       siteName:settings[0].site_name,siteDescription:settings[0].site_description,
-      autoplay:!!settings[0].autoplay,contactEmail:settings[0].contact_email||""
-    }:{siteName:"CenaLivre",siteDescription:"",autoplay:false,contactEmail:""};
+      autoplay:!!settings[0].autoplay,contactEmail:settings[0].contact_email||"",
+      logoUrl:settings[0].logo_url||"",iconUrl:settings[0].icon_url||""
+    }:{siteName:"CenaLivre",siteDescription:"",autoplay:false,contactEmail:"",logoUrl:"",iconUrl:""};
   });
   app.put<{Body:Obj}>("/api/v1/studio/settings",async(req,reply)=>{
     const actor=await requireActor(req,reply,true);if(!actor)return;
     if(!actor.isAdmin)return err(reply,403,"forbidden");
     const title=txt(req.body?.siteName,100),summary=description(req.body?.siteDescription);
     const email=req.body?.contactEmail===""||req.body?.contactEmail==null?"":normalizeEmail(req.body?.contactEmail);
+    const logo=String(req.body?.logoUrl||""),icon=String(req.body?.iconUrl||"");
+    if((logo&&!validateArtwork(logo))||(icon&&!validateArtwork(icon)))return err(reply,400,"invalid_branding");
     if(!title||summary===null||email===null||typeof req.body?.autoplay!=="boolean")return err(reply,400,"invalid_settings");
-    await pool.execute("INSERT INTO settings(id,site_name,site_description,autoplay,contact_email) VALUES(1,?,?,?,?) ON DUPLICATE KEY UPDATE site_name=VALUES(site_name),site_description=VALUES(site_description),autoplay=VALUES(autoplay),contact_email=VALUES(contact_email)",
-      [title,summary,req.body.autoplay,email]);
+    await pool.execute("INSERT INTO settings(id,site_name,site_description,autoplay,contact_email,logo_url,icon_url) VALUES(1,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE site_name=VALUES(site_name),site_description=VALUES(site_description),autoplay=VALUES(autoplay),contact_email=VALUES(contact_email),logo_url=VALUES(logo_url),icon_url=VALUES(icon_url)",
+      [title,summary,req.body.autoplay,email,logo||null,icon||null]);
     await audit(actor.id,"settings.updated","settings","1");
     return {ok:true};
   });

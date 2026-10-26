@@ -30,3 +30,17 @@ for(const file of files){
 }
 for(const filename of ['orbital-poster.svg','atlas-poster.svg','mares-poster.svg','lendas-poster.svg','cidade-poster.svg','orbital-banner.svg','episode-01.svg','episode-14.svg']) assert.ok(files.includes(filename),'missing '+filename);
 console.log('OK: UI oficial preservada, home em grade, navegação e 24 imagens locais');
+
+assert.match(js,/function openMediaPicker\(/);
+assert.match(js,/function mediaAdmin\(/);
+assert.match(js,/function mediaUploadModal\(/);
+assert.match(js,/function mediaField\(/);
+assert.match(js,/function updateMediaPicker\(/);
+assert.match(js,/media-picker-file/);
+assert.match(js,/media-tag-filter/);
+assert.match(js,/upload-settings-form/);
+assert.match(js,/el\.classList\.contains\('modal-backdrop'\)&&e\.target!==el/);
+assert.match(js,/el\.classList\.contains\('media-picker-backdrop'\)&&e\.target!==el/);
+assert.match(css,/\.media-picker-panel/);
+assert.match(css,/\.media-grid/);
+console.log('Mídias, seletor e política de fechamento de modal: OK');
