@@ -125,6 +125,23 @@ async function call(path,method='GET',body){
   assert.equal((await call('/api/v1/studio/media/settings','PUT',
     {maxFileMb:99,maxFiles:120,allowedTypes:['png']})).code,400,'Reject excessive size setting');
 
+  const banner=await call('/api/v1/studio/banners','POST',{
+    title:'Banner do catálogo',subtitle:'Campanha de exemplo',image:'assets/orbital-banner.svg',
+    mobileImage:'',target:sid,order:3,startAt:null,endAt:null,active:true
+  });
+  assert.equal(banner.code,201,'Create banner');
+  assert.equal((await call('/api/v1/studio/banners/'+banner.data.id,'PUT',{
+    title:'Banner atualizado',subtitle:'Campanha atualizada',image:'assets/mares-banner.svg',
+    mobileImage:'',target:sid,order:4,startAt:null,endAt:null,active:true
+  })).code,200,'Edit banner');
+  assert.equal((await call('/api/v1/studio/settings','PUT',{
+    siteName:'CenaLivre com identidade',siteDescription:'Testando logo e ícone',
+    contactEmail:'ci@example.test',autoplay:false,
+    logoUrl:'assets/orbital-poster.svg',iconUrl:'assets/episode-01.svg'
+  })).code,200,'Save branding');
+  const publicBranding=await call('/api/v1/public/bootstrap');
+  assert.equal(publicBranding.data.branding.logoUrl,'assets/orbital-poster.svg');
+
   const editorPassword=randomBytes(24).toString('hex');
   const user=await call('/api/v1/studio/users','POST',{email:'integration-editor@example.test',name:'Integration Editor',password:editorPassword});
   assert.equal(user.code,201);
