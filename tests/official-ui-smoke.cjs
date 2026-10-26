@@ -162,3 +162,15 @@ for(const part of [
 assert.ok(!js.includes("localStorage.setItem('invite"),
  'One-time invitation token must not be stored in localStorage');
 console.log('M1 team invitations and secure acceptance UI contracts: OK');
+
+for(const part of ['function categoryField(','function categoriesSettings(',
+ 'function saveQuickCategory(','function saveCategoryForm(',
+ 'function openEditorialHistory(','function submitEditorialReview(',
+ 'function decideEditorialReview(','function historyAction(',
+ 'review-submit-form','review-decide','category-quick-name','category-form',
+ '/api/v1/studio/categories','/api/v1/studio/editorial/']){
+ assert.ok(js.includes(part),'Missing CMS review/categories UI: '+part);
+}
+assert.match(css,/\.review-history/,'Review and history modal styled');
+assert.match(css,/\.category-settings-list/,'Category management styled');
+console.log('CMS approval, immutable history and dynamic category controls: OK');

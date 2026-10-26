@@ -7,6 +7,8 @@ import {registerStudioManagement} from "./studio-management.js";
 import {registerStudioBulk} from "./studio-bulk.js";
 import {registerStudioEditorial} from "./studio-editorial.js";
 import {registerTeamInvitations} from "./team-invitations.js";
+import {registerCategories} from "./categories.js";
+import {registerEditorialReview} from "./editorial-review.js";
 import {registerMedia} from "./media.js";
 import { publicEpisodeState, sanitizedYoutubeId } from "./domain/release.js";
 
@@ -17,6 +19,8 @@ registerStudioManagement(app);
 registerStudioBulk(app);
 registerStudioEditorial(app);
 registerTeamInvitations(app);
+registerCategories(app);
+registerEditorialReview(app);
 registerMedia(app);
 type Row = RowDataPacket & Record<string, unknown>;
 const records = async (sql:string):Promise<Row[]> => {

@@ -44,6 +44,7 @@ let publicLoadError='';
 let frontendVersion='checking';
 const localDemo=db;
 let studioData=null,studioUser=null,csrfToken='';
+let studioCategories=[];
 async function apiRequest(url,options={}){
   const write=!!options.method && !['GET','HEAD'].includes(options.method.toUpperCase());
   const headers={'Accept':'application/json',...(options.body?{'Content-Type':'application/json'}:{}),...(write&&csrfToken?{'x-csrf-token':csrfToken}:{}),...(options.headers||{})};
@@ -189,6 +190,8 @@ async function fetchStudioData(){
   studioData={...emptyState(),...payload,preferences:settings,saved:[]};
   await fetchMedia();
   await fetchInvitations();
+  try{studioCategories=(await apiRequest('/api/v1/studio/categories',{cache:'no-store'})).categories||[]}
+  catch(error){studioCategories=[];console.warn('Categorias indisponíveis',error)}
   render();
 }
 async function loadSession(){
@@ -858,7 +861,7 @@ function catalogRows(type){
    '<td class="catalog-wrap">'+esc((s.teamIds||[]).map(id=>by('teams',id)?.name).filter(Boolean).join(', ')||'Sem equipe')+'</td>'+
    '<td><button class="btn small catalog-count" data-action="catalog-to-seasons" data-id="'+esc(s.id)+'">'+count+' temp. · '+epCount+' ep.</button></td>'+
    '<td class="catalog-row-actions"><button class="btn small" data-action="series-artwork" data-id="'+esc(s.id)+'">Imagens</button>'+
-   '<button class="btn small" data-action="edit-series" data-id="'+esc(s.id)+'">Editar</button>'+
+   historyAction('series',s.id)+'<button class="btn small" data-action="edit-series" data-id="'+esc(s.id)+'">Editar</button>'+
    '<button class="btn small catalog-delete" data-action="delete-series" data-id="'+esc(s.id)+'">Excluir</button></td></tr>';
  }).join('');
  if(type==='seasons')return items.map(season=>{
@@ -868,7 +871,7 @@ function catalogRows(type){
    '<td><div><strong>'+esc(season.title)+'</strong><div class="catalog-status-text">'+
    ((season.status||'published')==='published'?'Publicado':season.status==='suspended'?'Suspenso':'Rascunho')+'</div></div></td>'+
    '<td><button class="btn small catalog-count" data-action="catalog-to-episodes" data-id="'+esc(season.seriesId)+'">'+number+' episódios</button></td>'+
-   '<td class="catalog-row-actions"><button class="btn small" data-action="edit-season" data-id="'+esc(season.id)+'">Editar</button>'+
+   '<td class="catalog-row-actions">'+historyAction('seasons',season.id)+'<button class="btn small" data-action="edit-season" data-id="'+esc(season.id)+'">Editar</button>'+
    '<button class="btn small catalog-delete" data-action="delete-season" data-id="'+esc(season.id)+'">Excluir</button></td></tr>';
  }).join('');
  return items.map(e=>{
@@ -879,7 +882,7 @@ function catalogRows(type){
    '<td class="catalog-wrap">'+esc(production?.title||'Série indisponível')+'</td>'+
    '<td><span class="badge '+(e.status==='published'?'green':e.status==='scheduled'?'orange':'blue')+'">'+stateLabel+'</span></td>'+
    '<td>'+esc(e.releaseAt?dt(e.releaseAt):'Sem data')+'</td>'+
-   '<td class="catalog-row-actions"><button class="btn small" data-action="edit-episode" data-id="'+esc(e.id)+'">Editar</button>'+
+   '<td class="catalog-row-actions">'+historyAction('episodes',e.id)+'<button class="btn small" data-action="edit-episode" data-id="'+esc(e.id)+'">Editar</button>'+
    '<button class="btn small catalog-delete" data-action="delete-episode" data-id="'+esc(e.id)+'">Excluir</button></td></tr>';
  }).join('');
 }
@@ -1043,7 +1046,7 @@ function editorialRows(type){
  '<div><strong>'+esc(b.title)+'</strong><div class="muted tiny">'+esc(by('series',b.target)?.title||'Sem destino')+'</div></div></div></td>'+
  '<td><span class="badge '+(bannerState(b)==='active'?'green':bannerState(b)==='inactive'?'blue':'orange')+'">'+bannerStateLabel(b)+'</span></td>'+
  '<td>'+esc(b.startAt?dt(b.startAt):'Imediato')+'</td><td>'+esc(b.endAt?dt(b.endAt):'Sem término')+'</td>'+
- '<td class="catalog-row-actions"><button class="btn small" data-action="edit-banner" data-id="'+esc(b.id)+'">Editar</button>'+
+ '<td class="catalog-row-actions">'+historyAction('banners',b.id)+'<button class="btn small" data-action="edit-banner" data-id="'+esc(b.id)+'">Editar</button>'+
  '<button class="btn small catalog-delete" data-action="editorial-delete" data-type="banners" data-id="'+esc(b.id)+'">Excluir</button></td></tr>').join('');
  if(type==='sections')return items.map((x)=>{
   const index=db.homeSections.findIndex(s=>s.id===x.id);
@@ -1211,7 +1214,7 @@ async function runEditorialOperation(button,dateInfo){
 }
 
 function teamsAdmin(){return pageHead('Equipes e permissões','Colaboradores, papéis e responsabilidade pelas produções.',`<button class="btn" data-action="create-team">${studioIcon('plus')} Equipe</button><button class="btn primary" data-action="create-member">${studioIcon('plus')} Integrante</button>${canInvite()?'<button type="button" class="btn primary" data-action="invite-open">'+studioIcon('users')+' Convidar</button>':''}`)+`<div class="two-column"><div class="panel"><h2>Equipes</h2><div class="stack">${db.teams.map(t=>`<div class="item-card"><div class="item-info"><h3>${esc(t.name)}</h3><p>${db.members.filter(m=>m.teamId===t.id).length} integrante(s) · ${db.series.filter(s=>s.teamIds.includes(t.id)).length} produção(ões)</p></div><button class="btn small" data-action="edit-team" data-id="${t.id}">Editar</button></div>`).join('')}</div></div><div class="panel"><h2>Integrantes</h2><table class="data-table"><thead><tr><th>Nome</th><th>Equipe</th><th>Papel</th><th></th></tr></thead><tbody>${db.members.map(m=>`<tr><td>${esc(m.name)}<div class="tiny muted">${esc(m.email)}</div></td><td>${esc(by('teams',m.teamId)?.name)}</td><td><span class="badge">${esc(m.role)}</span></td><td><button class="btn small" data-action="edit-member" data-id="${m.id}">Editar</button></td></tr>`).join('')}</tbody></table></div></div><div class="notice">Gerencie integrantes e seus papéis na equipe.</div>`+invitationList()}
-function settingsAdmin(){return pageHead('Configurações','')+`<nav class="settings-nav" aria-label="Categorias das configurações"><button class="btn small" data-action="settings-jump" data-target="settings-identidade" type="button">Identidade</button><button class="btn small" data-action="settings-jump" data-target="settings-marca" type="button">Marca</button><button class="btn small" data-action="settings-jump" data-target="settings-reproducao" type="button">Reprodução</button><button class="btn small" data-action="settings-jump" data-target="settings-uploads" type="button">Uploads</button><button class="btn small" data-action="settings-jump" data-target="settings-seguranca" type="button">Segurança</button></nav><section class="panel form-surface-light settings-panel" id="settings-identidade"><div class="settings-section-head"><div><h2>Identidade e portal</h2><p>Dados públicos, imagens da marca e comportamento da reprodução.</p></div></div><form id="settings-form" class="stack"><fieldset class="settings-category"><legend>Identidade da plataforma</legend><div class="field"><label>Nome da plataforma</label><input class="input" name="siteName" value="${esc(db.preferences.siteName)}" required></div><div class="field"><label>Descrição pública</label><textarea class="textarea" name="siteDescription">${esc(db.preferences.siteDescription)}</textarea></div><div class="field"><label>E-mail de contato institucional</label><input class="input" name="contactEmail" type="email" value="${esc(db.preferences.contactEmail||'')}" placeholder="contato@exemplo.com"></div></fieldset><fieldset class="settings-category" id="settings-marca"><legend>Marca · logotipo e ícone</legend>${mediaField('Logotipo','logoUrl',db.preferences.logoUrl||'','logo')}${mediaField('Ícone / favicon','iconUrl',db.preferences.iconUrl||'','icon')}</fieldset><fieldset class="settings-category" id="settings-reproducao"><legend>Reprodução</legend><label class="row tiny"><input type="checkbox" name="autoplay" ${db.preferences.autoplay?'checked':''}> Sugerir reprodução automática do próximo episódio</label></fieldset><div><button class="btn primary" type="submit" ${hosted&&!studioUser?.isAdmin?'disabled':''}>Salvar configurações</button></div></form></section><section class="panel form-surface-light settings-panel" id="settings-uploads"><div class="settings-section-head"><div><h2>Biblioteca de Mídia e uploads</h2><p>Defina os formatos e limites dos arquivos enviados.</p></div></div><form id="upload-settings-form" class="stack"><div class="form-grid"><div class="field"><label>Tamanho máximo por arquivo (1 a 20 MB)</label><input class="input" type="number" name="maxFileMb" min="1" max="20" value="${mediaData.settings.maxFileMb}" required></div><div class="field"><label>Quantidade máxima de imagens (1 a 2000)</label><input class="input" type="number" name="maxFiles" min="1" max="2000" value="${mediaData.settings.maxFiles}" required></div></div><div class="field"><label>Formatos permitidos</label><div class="pillset">${['png','jpeg','webp','gif'].map(t=>`<label class="pill"><input type="checkbox" name="allowedTypes" value="${t}" ${mediaData.settings.allowedTypes.includes(t)?'checked':''}> ${t.toUpperCase()}</label>`).join('')}</div></div><p class="muted tiny">Escolha os formatos e limites permitidos para novos envios. Os arquivos existentes serão mantidos.</p><div><button class="btn primary" type="submit" ${!studioUser?.isAdmin?'disabled':''}>Salvar limites de upload</button></div></form></section><section class="panel settings-panel" id="settings-seguranca"><h2>Ambiente e segurança</h2><p class="muted">O acesso às funções administrativas segue as permissões de cada usuário.</p></section>`}
+function settingsAdmin(){return pageHead('Configurações','')+`<nav class="settings-nav" aria-label="Categorias das configurações"><button class="btn small" data-action="settings-jump" data-target="settings-identidade" type="button">Identidade</button><button class="btn small" data-action="settings-jump" data-target="settings-marca" type="button">Marca</button><button class="btn small" data-action="settings-jump" data-target="settings-reproducao" type="button">Reprodução</button><button class="btn small" data-action="settings-jump" data-target="settings-uploads" type="button">Uploads</button><button class="btn small" data-action="settings-jump" data-target="settings-categorias" type="button">Categorias</button><button class="btn small" data-action="settings-jump" data-target="settings-seguranca" type="button">Segurança</button></nav><section class="panel form-surface-light settings-panel" id="settings-identidade"><div class="settings-section-head"><div><h2>Identidade e portal</h2><p>Dados públicos, imagens da marca e comportamento da reprodução.</p></div></div><form id="settings-form" class="stack"><fieldset class="settings-category"><legend>Identidade da plataforma</legend><div class="field"><label>Nome da plataforma</label><input class="input" name="siteName" value="${esc(db.preferences.siteName)}" required></div><div class="field"><label>Descrição pública</label><textarea class="textarea" name="siteDescription">${esc(db.preferences.siteDescription)}</textarea></div><div class="field"><label>E-mail de contato institucional</label><input class="input" name="contactEmail" type="email" value="${esc(db.preferences.contactEmail||'')}" placeholder="contato@exemplo.com"></div></fieldset><fieldset class="settings-category" id="settings-marca"><legend>Marca · logotipo e ícone</legend>${mediaField('Logotipo','logoUrl',db.preferences.logoUrl||'','logo')}${mediaField('Ícone / favicon','iconUrl',db.preferences.iconUrl||'','icon')}</fieldset><fieldset class="settings-category" id="settings-reproducao"><legend>Reprodução</legend><label class="row tiny"><input type="checkbox" name="autoplay" ${db.preferences.autoplay?'checked':''}> Sugerir reprodução automática do próximo episódio</label></fieldset><div><button class="btn primary" type="submit" ${hosted&&!studioUser?.isAdmin?'disabled':''}>Salvar configurações</button></div></form></section><section class="panel form-surface-light settings-panel" id="settings-uploads"><div class="settings-section-head"><div><h2>Biblioteca de Mídia e uploads</h2><p>Defina os formatos e limites dos arquivos enviados.</p></div></div><form id="upload-settings-form" class="stack"><div class="form-grid"><div class="field"><label>Tamanho máximo por arquivo (1 a 20 MB)</label><input class="input" type="number" name="maxFileMb" min="1" max="20" value="${mediaData.settings.maxFileMb}" required></div><div class="field"><label>Quantidade máxima de imagens (1 a 2000)</label><input class="input" type="number" name="maxFiles" min="1" max="2000" value="${mediaData.settings.maxFiles}" required></div></div><div class="field"><label>Formatos permitidos</label><div class="pillset">${['png','jpeg','webp','gif'].map(t=>`<label class="pill"><input type="checkbox" name="allowedTypes" value="${t}" ${mediaData.settings.allowedTypes.includes(t)?'checked':''}> ${t.toUpperCase()}</label>`).join('')}</div></div><p class="muted tiny">Escolha os formatos e limites permitidos para novos envios. Os arquivos existentes serão mantidos.</p><div><button class="btn primary" type="submit" ${!studioUser?.isAdmin?'disabled':''}>Salvar limites de upload</button></div></form></section>${categoriesSettings()}<section class="panel settings-panel" id="settings-seguranca"><h2>Ambiente e segurança</h2><p class="muted">O acesso às funções administrativas segue as permissões de cada usuário.</p></section>`}
 function studioPage(){const page=route.parts[1]||'dashboard';return studioFrame(({dashboard,series:seriesAdmin,seasons:seasonsAdmin,episodes:episodesAdmin,media:mediaAdmin,schedule:scheduleAdmin,homepage:homepageAdmin,teams:teamsAdmin,settings:settingsAdmin}[page]||dashboard)())}
 function render(){parse();
 db=route.studio?(hosted?(studioData||publicData):localDemo):publicData;
@@ -1253,6 +1256,150 @@ if(route.parts[0]==='assistir'&&activeVideo===route.parts[1]){
 }
 function modal(title,body){document.getElementById('modal-root').innerHTML=`<div class="modal-backdrop" data-action="close-modal"><div class="modal form-surface-light" role="dialog" aria-modal="true" aria-label="${esc(title)}"><div class="row between"><h2>${esc(title)}</h2><button class="btn small" data-action="close-modal" aria-label="Fechar">${studioIcon('x')}</button></div>${body}</div></div>`}
 const field=(label,name,value='',type='text',extra='')=>`<div class="field"><label>${label}</label><input class="input" name="${name}" type="${type}" value="${esc(value)}" ${extra}></div>`;const area=(label,name,value='')=>`<div class="field span2"><label>${label}</label><textarea class="textarea" name="${name}">${esc(value)}</textarea></div>`;const select=(label,name,opts,selected)=>`<div class="field"><label>${label}</label><select class="select" name="${name}">${opts.map(x=>`<option value="${esc(x.id)}" ${x.id===selected?'selected':''}>${esc(x.title||x.name)}</option>`).join('')}</select></div>`;const submit=`<div class="span2 row between" style="margin-top:12px"><button type="button" class="btn" data-action="close-modal">Cancelar</button><button type="submit" class="btn primary">Salvar alterações</button></div>`;
+function categoryField(current=''){
+ if(!hosted)return field('Categoria','category',current||'Documentário','text','required');
+ const cats=studioCategories.map(c=>({id:c.name,title:c.name}));
+ if(current&&!cats.some(c=>c.id===current))cats.unshift({id:current,title:current});
+ const options=select('Categoria','category',cats,current||cats[0]?.id||'');
+ return '<div class="category-picker">'+options+
+  (studioUser?.isAdmin?'<button type="button" class="btn small" data-action="category-quick">+ Nova categoria</button>':'')+
+  '<div class="category-quick-form" hidden><input class="input" id="category-quick-name" maxlength="100" placeholder="Nome da categoria">'+
+  '<button type="button" class="btn small primary" data-action="category-quick-save">Criar</button></div></div>';
+}
+function categoriesSettings(){
+ return '<section class="panel form-surface-light settings-panel" id="settings-categorias">'+
+ '<div class="settings-section-head"><div><h2>Categorias</h2><p>Organize os gêneros usados nas séries.</p></div>'+
+ (studioUser?.isAdmin?'<button class="btn primary small" type="button" data-action="category-new">+ Nova categoria</button>':'')+'</div>'+
+ '<div class="category-settings-list">'+(studioCategories.length?studioCategories.map(c=>
+ '<div class="category-settings-item"><strong>'+esc(c.name)+'</strong><span class="muted tiny">'+c.count+' série(s)</span>'+
+ (studioUser?.isAdmin?'<button class="btn small" data-action="category-edit" data-id="'+esc(c.id)+'">Editar</button>'+
+ '<button class="btn small catalog-delete" data-action="category-delete" data-id="'+esc(c.id)+'" '+(c.count?'disabled title="Categoria em uso"':'')+'>Excluir</button>':'')+'</div>').join(''):
+ '<p class="muted">Nenhuma categoria cadastrada.</p>')+'</div></section>';
+}
+function categoryModal(id){
+ const category=studioCategories.find(c=>c.id===id);
+ modal(category?'Editar categoria':'Nova categoria','<form id="category-form" data-id="'+esc(id||'')+'" class="stack">'+
+ field('Nome','name',category?.name||'','text','required minlength="2" maxlength="100"')+submit+'</form>');
+}
+async function categoryRequest(path,method,body){
+ await apiRequest(path,{method,...(body?{body:JSON.stringify(body)}:{})});
+ studioCategories=(await apiRequest('/api/v1/studio/categories',{cache:'no-store'})).categories||[];
+ await fetchStudioData();await refreshPublicCatalog();
+}
+async function saveCategoryForm(form){
+ const value=String(new FormData(form).get('name')||'').trim();
+ if(value.length<2){toast('Informe um nome para a categoria.');return;}
+ const id=form.dataset.id,btn=form.querySelector('[type="submit"]');if(btn)btn.disabled=true;
+ try{
+  await categoryRequest('/api/v1/studio/categories'+(id?'/'+encodeURIComponent(id):''),id?'PUT':'POST',{name:value});
+  document.getElementById('modal-root').innerHTML='';render();toast('Categoria salva.');
+ }catch(error){toast(error.message);if(btn)btn.disabled=false}
+}
+async function saveQuickCategory(el){
+ const editor=el.closest('form'),input=editor?.querySelector('#category-quick-name');
+ if(!input)return;
+ const name=input.value.trim();
+ if(name.length<2){toast('Informe um nome válido.');return;}
+ el.disabled=true;
+ try{
+  const result=await apiRequest('/api/v1/studio/categories',{method:'POST',body:JSON.stringify({name})});
+  studioCategories=(await apiRequest('/api/v1/studio/categories',{cache:'no-store'})).categories||[];
+  const dropdown=editor.querySelector('select[name="category"]');
+  dropdown?.add(new Option(result.name,result.name,true,true));
+  input.value='';editor.querySelector('.category-quick-form').hidden=true;
+  toast('Categoria criada e selecionada.');
+ }catch(error){toast(error.message)}
+ finally{el.disabled=false}
+}
+async function deleteCategory(id){
+ const category=studioCategories.find(c=>c.id===id);if(!category)return;
+ if(category.count){toast('Há séries utilizando esta categoria.');return;}
+ if(!window.confirm('Excluir a categoria '+category.name+'?'))return;
+ try{
+  await categoryRequest('/api/v1/studio/categories/'+encodeURIComponent(id),'DELETE');
+  render();toast('Categoria excluída.');
+ }catch(error){toast(error.message)}
+}
+const reviewKindNames={series:'Série',season:'Temporada',episode:'Episódio',banner:'Banner'};
+function reviewKind(type){return {series:'series',seasons:'season',episodes:'episode',banners:'banner'}[type]||type}
+async function openEditorialHistory(type,id){
+ const kind=reviewKind(type);
+ if(!reviewKindNames[kind])return;
+ modal('Revisão editorial','<p class="muted">Carregando histórico...</p>');
+ try{
+  const data=await apiRequest('/api/v1/studio/editorial/'+encodeURIComponent(kind)+'/'+encodeURIComponent(id)+'/history',{cache:'no-store'});
+  const versionList=(data.versions||[]),reviews=(data.reviews||[]);
+  const revisions=versionList.map((v,i)=>{
+   const previous=versionList[i+1]?.snapshot||{};
+   const changeNames=Object.keys(v.snapshot||{}).filter(k=>JSON.stringify(v.snapshot[k])!==JSON.stringify(previous[k]));
+   return '<details class="review-version"><summary><strong>Versão #'+v.id+'</strong> · '+
+    esc(({baseline:'Inicial',created:'Criada',updated:'Atualizada',deleted:'Excluída'}[v.operation]||v.operation))+
+    ' · '+esc(v.createdAt?dt(v.createdAt):'')+'</summary>'+
+    '<p class="muted tiny">Campos: '+esc(changeNames.join(', ')||'sem alterações')+'</p>'+
+    '<pre class="review-json">'+esc(JSON.stringify(v.snapshot,null,2))+'</pre>'+    '<button type="button" class="btn small" data-action="review-restore" data-kind="'+esc(kind)+    '" data-id="'+esc(id)+'" data-version="'+v.id+'">Restaurar metadados</button></details>';
+  }).join('');
+  const reviewRows=reviews.map(r=>{
+   const state={pending:'Aguardando',approved:'Aprovado',rejected:'Rejeitado',stale:'Desatualizado'}[r.state]||r.state;
+   return '<div class="review-card"><div class="row between"><strong>'+esc(state)+'</strong><span class="muted tiny">'+
+    esc(r.submittedAt?dt(r.submittedAt):'')+'</span></div>'+
+    '<div class="muted tiny">Solicitante: '+esc(r.submittedBy||'')+' · Versão #'+r.versionId+'</div>'+
+    (r.message?'<p>'+esc(r.message)+'</p>':'')+
+    (r.decisionNote?'<p class="muted tiny">Parecer: '+esc(r.decisionNote)+'</p>':'')+
+    (r.state==='pending'?'<div class="review-decision"><textarea class="textarea" data-review-note="'+esc(r.id)+
+     '" placeholder="Parecer da revisão (opcional)" maxlength="1000"></textarea>'+
+     '<div class="row"><button class="btn small primary" type="button" data-action="review-decide" data-decision="approve" data-id="'+esc(r.id)+'" data-kind="'+esc(kind)+'" data-target="'+esc(id)+'">Aprovar e publicar</button>'+
+     '<button class="btn small" type="button" data-action="review-decide" data-decision="reject" data-id="'+esc(r.id)+'" data-kind="'+esc(kind)+'" data-target="'+esc(id)+'">Rejeitar</button></div></div>':'')+
+    '</div>';
+  }).join('');
+  const body='<div class="review-history"><p class="muted tiny">As versões são preservadas automaticamente a cada alteração, inclusive em ações em lote.</p>'+
+   '<form id="review-submit-form" data-kind="'+esc(kind)+'" data-id="'+esc(id)+'" class="review-request">'+
+   '<label>Observações para a revisão</label><textarea class="textarea" name="message" maxlength="1000" placeholder="O que deve ser avaliado?"></textarea>'+
+   '<button class="btn primary small" type="submit">Solicitar revisão</button></form>'+
+   '<h3>Solicitações</h3>'+(reviewRows||'<p class="muted">Nenhuma solicitação registrada.</p>')+
+   '<h3>Histórico de versões</h3>'+(revisions||'<p class="muted">Ainda não existem versões.</p>')+'</div>';
+  modal('Histórico · '+reviewKindNames[kind],body);
+ }catch(error){modal('Revisão editorial','<p class="muted">'+esc(error.message)+'</p>')}
+}
+async function restoreEditorialVersion(button){
+ const {kind,id,version}=button.dataset;
+ if(!window.confirm('Restaurar os metadados desta versão? O estado de publicação e as permissões atuais serão mantidos.'))return;
+ button.disabled=true;
+ try{
+  await apiRequest('/api/v1/studio/editorial/'+encodeURIComponent(kind)+'/'+encodeURIComponent(id)+'/restore',{
+   method:'POST',body:JSON.stringify({versionId:Number(version)})
+  });
+  await fetchStudioData();await refreshPublicCatalog();await openEditorialHistory(kind,id);
+  toast('Versão restaurada. Uma nova entrada foi salva no histórico.');
+ }catch(error){toast(error.message);button.disabled=false}
+}
+async function submitEditorialReview(form){
+ const kind=form.dataset.kind,id=form.dataset.id,button=form.querySelector('[type="submit"]');
+ if(button)button.disabled=true;
+ try{
+  const note=String(new FormData(form).get('message')||'');
+  await apiRequest('/api/v1/studio/editorial/'+encodeURIComponent(kind)+'/'+encodeURIComponent(id)+'/submit',{
+   method:'POST',body:JSON.stringify({message:note})
+  });
+  toast('Revisão solicitada.');await openEditorialHistory(kind,id);
+ }catch(error){toast(error.message);if(button)button.disabled=false}
+}
+async function decideEditorialReview(button){
+ const {id,kind,target,decision}=button.dataset;
+ const note=document.querySelector('[data-review-note="'+id+'"]')?.value||'';
+ button.disabled=true;
+ try{
+  await apiRequest('/api/v1/studio/editorial/reviews/'+encodeURIComponent(id)+'/decision',{
+   method:'POST',body:JSON.stringify({decision,note})
+  });
+  await fetchStudioData();await refreshPublicCatalog();
+  await openEditorialHistory(kind,target);
+  toast(decision==='approve'?'Revisão aprovada e conteúdo publicado.':'Revisão rejeitada.');
+ }catch(error){toast(error.message);button.disabled=false}
+}
+function historyAction(type,id){
+ return '<button class="btn small" type="button" data-action="review-open" data-type="'+type+
+ '" data-id="'+esc(id)+'">Histórico</button>';
+}
 function openSeriesArtwork(seriesId){
  const s=by('series',seriesId);
  if(!s)return;
@@ -1263,7 +1410,7 @@ function openSeriesArtwork(seriesId){
   submit+'</form>';
  modal('Imagens · '+s.title,body);
 }
-function openEditor(type,entityId){const editing=!!entityId,x=editing?by(type,entityId):null;let body='';if(type==='series'){body=`<form class="form-grid" data-form="series" data-id="${entityId||''}">${field('Título','title',x?.title,'text','required')}${field('Categoria','category',x?.category||'Documentário','text','required')}${area('Sinopse','summary',x?.summary)}${mediaField('Pôster vertical','poster',x?.poster||img('new-poster',650,900),'poster')}${mediaField('Banner horizontal','banner',x?.banner||img('new-banner',1300,700),'banner')}<div class="field span2"><label>Equipes responsáveis (selecione uma ou mais)</label><div class="pillset">${db.teams.map(t=>`<label class="pill"><input type="checkbox" name="teamIds" value="${t.id}" ${(x?.teamIds||[]).includes(t.id)?'checked':''}> ${esc(t.name)}</label>`).join('')}</div></div><label class="span2"><input type="checkbox" name="featured" ${x?.featured?'checked':''}> Destaque no portal</label>${submit}</form>`}else if(type==='seasons'){body=`<form class="form-grid" data-form="seasons" data-id="${entityId||''}">${select('Série','seriesId',db.series,x?.seriesId)}${field('Número','number',x?.number||seasons(db.series[0]?.id).length+1,'number','min="1" required')}${field('Título da temporada','title',x?.title||'Nova temporada','text','required')}${select('Estado da temporada','status',catalogStatuses.seasons.map(t=>({id:t.id,title:t.name})),x?.status||(editing?'published':'draft'))}${submit}</form>`}else if(type==='episodes'){body=`<form class="form-grid" data-form="episodes" data-id="${entityId||''}">${select('Temporada','seasonId',db.seasons.map(s=>({...s,title:`${by('series',s.seriesId)?.title} — T${s.number}`})),x?.seasonId)}${field('Número do episódio','number',x?.number||1,'number','min="1" required')}${field('Título','title',x?.title,'text','required')}${field('Duração estimada (min)','duration',x?.duration||20,'number','min="1"')}${area('Sinopse','summary',x?.summary)}${field('URL ou ID do vídeo YouTube','youtube',x?.youtube)}${mediaField('Thumbnail do episódio','thumbnail',x?.thumbnail||img('new-episode',1200,700),'thumbnail')}${field('Disponível a partir de','releaseAt',(x?datetimeLocal(x.releaseAt):future(1)),'datetime-local','required')}${field('Disponível até (opcional)','endAt',(x?datetimeLocal(x.endAt):''),'datetime-local')}${select('Estado editorial','status',[{id:'published',title:'Aprovado / publicado'},{id:'scheduled',title:'Agendado'},{id:'draft',title:'Rascunho'},{id:'suspended',title:'Suspenso'}],x?.status||'scheduled')}${submit}</form>`}else if(type==='banners'){body=`<form class="form-grid" data-form="banners" data-id="${entityId||''}">${field('Título','title',x?.title,'text','required')}${field('Prioridade (menor primeiro)','order',x?.order||1,'number','min="1"')}${area('Texto de apoio','subtitle',x?.subtitle)}${mediaField('Banner desktop','image',x?.image||img('new-campaign',1400,800),'banner')}${mediaField('Banner mobile (opcional)','mobileImage',x?.mobileImage,'banner')}${select('Destino: série','target',db.series,x?.target)}${field('Início da campanha','startAt',(x?datetimeLocal(x.startAt):future(1)),'datetime-local')}${field('Fim da campanha','endAt',(x?datetimeLocal(x.endAt):''),'datetime-local')}<label class="span2"><input type="checkbox" name="active" ${x?.active!==false?'checked':''}> Campanha habilitada</label>${submit}</form>`}else if(type==='teams'){body=`<form class="form-grid" data-form="teams" data-id="${entityId||''}">${field('Nome da equipe','name',x?.name,'text','required')}${field('Descrição','description',x?.description)}${submit}</form>`}else if(type==='members'){body=`<form class="form-grid" data-form="members" data-id="${entityId||''}">${field('Nome','name',x?.name,'text','required')}${field('E-mail','email',x?.email,'email','required')}${select('Equipe','teamId',db.teams,x?.teamId)}${select('Papel na equipe','role',[{id:'Gestora',title:'Gestora'},{id:'Produtor',title:'Produtor'},{id:'Editor',title:'Editor'},{id:'Publicador',title:'Publicador'},{id:'Colaborador',title:'Colaborador'}],x?.role||'Editor')}${submit}</form>`}else if(type==='media'){body=`<form class="form-grid" data-form="media">${field('Nome do arquivo','name','','text','required')}${field('URL da imagem','url','','url','required')}${submit}</form>`}if(hosted&&type==='series'){
+function openEditor(type,entityId){const editing=!!entityId,x=editing?by(type,entityId):null;let body='';if(type==='series'){body=`<form class="form-grid" data-form="series" data-id="${entityId||''}">${field('Título','title',x?.title,'text','required')}${categoryField(x?.category)}${area('Sinopse','summary',x?.summary)}${mediaField('Pôster vertical','poster',x?.poster||img('new-poster',650,900),'poster')}${mediaField('Banner horizontal','banner',x?.banner||img('new-banner',1300,700),'banner')}<div class="field span2"><label>Equipes responsáveis (selecione uma ou mais)</label><div class="pillset">${db.teams.map(t=>`<label class="pill"><input type="checkbox" name="teamIds" value="${t.id}" ${(x?.teamIds||[]).includes(t.id)?'checked':''}> ${esc(t.name)}</label>`).join('')}</div></div><label class="span2"><input type="checkbox" name="featured" ${x?.featured?'checked':''}> Destaque no portal</label>${submit}</form>`}else if(type==='seasons'){body=`<form class="form-grid" data-form="seasons" data-id="${entityId||''}">${select('Série','seriesId',db.series,x?.seriesId)}${field('Número','number',x?.number||seasons(db.series[0]?.id).length+1,'number','min="1" required')}${field('Título da temporada','title',x?.title||'Nova temporada','text','required')}${select('Estado da temporada','status',catalogStatuses.seasons.map(t=>({id:t.id,title:t.name})),x?.status||(editing?'published':'draft'))}${submit}</form>`}else if(type==='episodes'){body=`<form class="form-grid" data-form="episodes" data-id="${entityId||''}">${select('Temporada','seasonId',db.seasons.map(s=>({...s,title:`${by('series',s.seriesId)?.title} — T${s.number}`})),x?.seasonId)}${field('Número do episódio','number',x?.number||1,'number','min="1" required')}${field('Título','title',x?.title,'text','required')}${field('Duração estimada (min)','duration',x?.duration||20,'number','min="1"')}${area('Sinopse','summary',x?.summary)}${field('URL ou ID do vídeo YouTube','youtube',x?.youtube)}${mediaField('Thumbnail do episódio','thumbnail',x?.thumbnail||img('new-episode',1200,700),'thumbnail')}${field('Disponível a partir de','releaseAt',(x?datetimeLocal(x.releaseAt):future(1)),'datetime-local','required')}${field('Disponível até (opcional)','endAt',(x?datetimeLocal(x.endAt):''),'datetime-local')}${select('Estado editorial','status',[{id:'published',title:'Aprovado / publicado'},{id:'scheduled',title:'Agendado'},{id:'draft',title:'Rascunho'},{id:'suspended',title:'Suspenso'}],x?.status||'scheduled')}${submit}</form>`}else if(type==='banners'){body=`<form class="form-grid" data-form="banners" data-id="${entityId||''}">${field('Título','title',x?.title,'text','required')}${field('Prioridade (menor primeiro)','order',x?.order||1,'number','min="1"')}${area('Texto de apoio','subtitle',x?.subtitle)}${mediaField('Banner desktop','image',x?.image||img('new-campaign',1400,800),'banner')}${mediaField('Banner mobile (opcional)','mobileImage',x?.mobileImage,'banner')}${select('Destino: série','target',db.series,x?.target)}${field('Início da campanha','startAt',(x?datetimeLocal(x.startAt):future(1)),'datetime-local')}${field('Fim da campanha','endAt',(x?datetimeLocal(x.endAt):''),'datetime-local')}<label class="span2"><input type="checkbox" name="active" ${x?.active!==false?'checked':''}> Campanha habilitada</label>${submit}</form>`}else if(type==='teams'){body=`<form class="form-grid" data-form="teams" data-id="${entityId||''}">${field('Nome da equipe','name',x?.name,'text','required')}${field('Descrição','description',x?.description)}${submit}</form>`}else if(type==='members'){body=`<form class="form-grid" data-form="members" data-id="${entityId||''}">${field('Nome','name',x?.name,'text','required')}${field('E-mail','email',x?.email,'email','required')}${select('Equipe','teamId',db.teams,x?.teamId)}${select('Papel na equipe','role',[{id:'Gestora',title:'Gestora'},{id:'Produtor',title:'Produtor'},{id:'Editor',title:'Editor'},{id:'Publicador',title:'Publicador'},{id:'Colaborador',title:'Colaborador'}],x?.role||'Editor')}${submit}</form>`}else if(type==='media'){body=`<form class="form-grid" data-form="media">${field('Nome do arquivo','name','','text','required')}${field('URL da imagem','url','','url','required')}${submit}</form>`}if(hosted&&type==='series'){
   if(editing){
     body=body.replaceAll('name="teamIds"','name="teamIds" disabled');
     body+='<p class="notice">Equipes responsáveis não podem ser alteradas após a criação nesta etapa.</p>';
@@ -1400,6 +1547,18 @@ function formSubmit(form){const type=form.dataset.form;if(!type)return;
 if(hosted){if(['series','series-artwork','seasons','episodes','teams','members','banners'].includes(type)){void saveRemoteEntity(form);}else toast('Esta operação ainda não está habilitada.');return;}
 const f=new FormData(form),v=Object.fromEntries(f.entries());if(type==='episodes'&&v.endAt&&v.releaseAt&&new Date(v.endAt)<=new Date(v.releaseAt)){toast('O término precisa ser posterior à estreia.');return}if(type==='banners'&&v.endAt&&v.startAt&&new Date(v.endAt)<=new Date(v.startAt)){toast('O fim da campanha precisa ser posterior ao início.');return}if(type==='series'){v.slug=slug(v.title);v.teamIds=f.getAll('teamIds');v.featured=f.has('featured')}if(type==='banners'){v.active=f.has('active');v.order=Number(v.order)||1}if(type==='episodes'){v.number=Number(v.number);v.duration=Number(v.duration);v.status=v.status||'scheduled'}if(type==='seasons')v.number=Number(v.number);if(type==='series'&&!v.teamIds.length){toast('Selecione uma equipe responsável.');return}const old=form.dataset.id&&by(type,form.dataset.id);if(old)Object.assign(old,v);else db[type].push({id:id(type[0]),...v});save();document.getElementById('modal-root').innerHTML='';render();toast('Alterações salvas.')}
 function handle(action,el){const eid=el.dataset.id;
+if(action==='category-new'){categoryModal();return}
+if(action==='category-edit'){categoryModal(eid);return}
+if(action==='category-delete'){void deleteCategory(eid);return}
+if(action==='category-quick'){
+ const section=el.closest('.category-picker')?.querySelector('.category-quick-form');
+ if(section)section.hidden=!section.hidden;
+ return;
+}
+if(action==='category-quick-save'){void saveQuickCategory(el);return}
+if(action==='review-open'){void openEditorialHistory(el.dataset.type,eid);return}
+if(action==='review-restore'){void restoreEditorialVersion(el);return}
+if(action==='review-decide'){void decideEditorialReview(el);return}
 if(action==='invite-open'){inviteModal();return}
 if(action==='invite-revoke'){void revokeInvitation(eid);return}
 if(action==='invite-copy'){
@@ -1532,6 +1691,8 @@ document.addEventListener('click',e=>{
  if(el.tagName==='BUTTON')e.preventDefault();
  handle(el.dataset.action,el);
 });document.addEventListener('submit',e=>{e.preventDefault();
+if(e.target.id==='review-submit-form'){void submitEditorialReview(e.target);return}
+if(e.target.id==='category-form'){void saveCategoryForm(e.target);return;}
 if(e.target.id==='studio-invite-form'){void createInvitation(e.target);return;}
 if(e.target.id==='invite-accept-form'){
  const fields=new FormData(e.target);
