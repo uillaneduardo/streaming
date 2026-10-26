@@ -16,6 +16,8 @@ jobs:
         run: node --check apps/web/app.js
       - name: Offline artwork and navigation contract
         run: node tests/official-ui-smoke.cjs
+      - name: No demo seeding in production contract
+        run: node tests/migration-contract.cjs
       - name: Build manifest checks
         run: |
           test -f compose.yml
