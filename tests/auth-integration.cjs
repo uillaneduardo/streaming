@@ -36,7 +36,7 @@ async function call(path,method='GET',body){
   });
   assert.equal(series.code,201,'Create series');
   const sid=series.data.id;
-  const season=await call('/api/v1/studio/seasons','POST',{seriesId:sid,number:1,title:'Primeira temporada'});
+  const season=await call('/api/v1/studio/seasons','POST',{seriesId:sid,number:1,title:'Primeira temporada',status:'published'});
   assert.equal(season.code,201,'Create season');
   assert.equal((await call('/api/v1/studio/seasons/'+season.data.id,'PUT',
     {seriesId:sid,number:1,title:'Temporada Atualizada'})).code,200,'Edit season');
@@ -71,6 +71,31 @@ async function call(path,method='GET',body){
   const futurePublic=await call('/api/v1/public/episodes/'+future.data.id);
   assert.equal(futurePublic.code,200);
   assert.equal(futurePublic.data.youtube,null,'Embargo must hide video ID');
+
+  const bulk=(resource,action,ids,status)=>
+    call('/api/v1/studio/bulk','POST',{resource,action,ids,...(status?{status}:{})});
+  // A season gates all of its public episodes while the editor retains metadata.
+  assert.equal((await bulk('seasons','set_status',[season.data.id],'draft')).code,200,'Make season draft');
+  assert.equal((await call('/api/v1/public/episodes/'+episodeId)).code,404,'Draft season hides video');
+  let seasonState=await call('/api/v1/studio/bootstrap');
+  assert.equal(seasonState.data.seasons.find(t=>t.id===season.data.id).status,'draft','Studio retains draft season');
+  assert.equal((await bulk('seasons','set_status',[season.data.id],'published')).code,200,'Republish season');
+  assert.equal((await call('/api/v1/public/episodes/'+episodeId)).code,200,'Republished season restores video');
+  const groupedDraft=await bulk('episodes','set_status',[episodeId,future.data.id],'draft');
+  assert.equal(groupedDraft.code,200,'Atomic multi-episode draft');
+  assert.equal(groupedDraft.data.count,2);
+  assert.equal((await call('/api/v1/public/episodes/'+episodeId)).code,404,'Draft video hidden');
+  assert.equal((await bulk('episodes','set_status',[episodeId],'published')).code,200,'Publish episode');
+  assert.equal((await bulk('episodes','set_status',[future.data.id],'scheduled')).code,200,'Schedule episode');
+  assert.equal((await call('/api/v1/public/episodes/'+future.data.id)).data.youtube,null,'Future embargo retained');
+  assert.equal((await bulk('series','set_status',[sid],'draft')).code,200,'Make series draft');
+  assert.equal((await call('/api/v1/public/series/'+series.data.slug)).code,404,'Draft series hidden');
+  assert.equal((await bulk('series','set_status',[sid],'public')).code,200,'Publish series');
+  assert.equal((await call('/api/v1/public/episodes/'+episodeId)).code,200,'Restored series visible');
+  assert.equal((await bulk('episodes','set_status',[episodeId],'unknown')).code,400,'Reject illegal status');
+  assert.equal((await bulk('episodes','delete',[episodeId,episodeId])).code,400,'Reject duplicated ids');
+  assert.equal((await bulk('episodes','delete',Array.from({length:101},(_,i)=>'id'+i))).code,400,'Enforce selection limit');
+
   assert.equal((await call('/api/v1/studio/settings','PUT',{
     siteName:'CenaLivre CI',siteDescription:'Testado',contactEmail:'ci@example.test',autoplay:true
   })).code,200,'Update settings');
@@ -195,12 +220,27 @@ async function call(path,method='GET',body){
     youtube:'',thumbnail:'assets/episode-01.svg',releaseAt:null,duration:20,status:'draft'
   });
   assert.equal(createdEpisode.code,201,'Create removable episode');
-  assert.equal((await call('/api/v1/studio/series/'+created.data.id,'DELETE')).code,409,'Dependencies protect series');
-  assert.equal((await call('/api/v1/studio/seasons/'+createdSeason.data.id,'DELETE')).code,409,'Dependencies protect seasons');
-  assert.equal((await call('/api/v1/studio/episodes/'+createdEpisode.data.id,'DELETE')).code,200,'Remove episode');
-  assert.equal((await call('/api/v1/studio/seasons/'+createdSeason.data.id,'DELETE')).code,200,'Remove empty season');
-  assert.equal((await call('/api/v1/studio/series/'+created.data.id,'DELETE')).code,200,'Remove empty series');
-  assert.equal((await call('/api/v1/studio/series/'+created.data.id,'DELETE')).code,404,'Already-deleted series not found');
+
+  const other=await call('/api/v1/studio/series','POST',{
+    title:'Vazio para teste '+randomBytes(4).toString('hex'),category:'Teste',summary:'Validação atômica',
+    poster:'assets/orbital-poster.svg',banner:'assets/orbital-banner.svg',teamIds:[teamId],visibility:'draft'
+  });
+  assert.equal(other.code,201,'Create second removable series');
+  assert.equal((await bulk('series','delete',[created.data.id,other.data.id])).code,409,'Batch refuses dependencies');
+  assert.equal((await call('/api/v1/studio/bootstrap')).data.series.some(x=>x.id===other.data.id),true,'Failure did not partially delete');
+  const missingSchedule=await bulk('episodes','set_status',[createdEpisode.data.id,episodeId],'published');
+  assert.equal(missingSchedule.code,409,'Batch rejects episode without release date');
+  assert.equal((await call('/api/v1/studio/bootstrap')).data.episodes.find(x=>x.id===createdEpisode.data.id).status,'draft','Failure did not partially publish');
+  const secondDraft=await call('/api/v1/studio/episodes','POST',{
+    seasonId:createdSeason.data.id,number:2,title:'Outro episódio',summary:'',
+    youtube:'',thumbnail:'assets/episode-01.svg',releaseAt:null,duration:10,status:'draft'
+  });
+  assert.equal(secondDraft.code,201,'Second removable episode');
+  assert.equal((await bulk('episodes','delete',[createdEpisode.data.id,secondDraft.data.id])).code,200,'Delete multiple episodes');
+  assert.equal((await bulk('seasons','delete',[createdSeason.data.id])).code,200,'Remove season in batch');
+  assert.equal((await bulk('series','delete',[created.data.id,other.data.id])).code,200,'Remove both series atomically');
+  assert.equal((await call('/api/v1/studio/bulk','POST',{resource:'series',action:'delete',ids:[other.data.id]})).code,404,'No repeated deletion');
+
   const currentSeries=await call('/api/v1/studio/bootstrap');
   assert.equal(currentSeries.data.series.some(x=>x.id===created.data.id),false,'No deleted series in Studio');
   const publicAfterDelete=await call('/api/v1/public/bootstrap');
@@ -221,11 +261,17 @@ async function call(path,method='GET',body){
   assert.equal((await call('/api/v1/studio/series/s1','PUT',form)).code,200);
   const editorCsrf=csrf;csrf='';
   assert.equal((await call('/api/v1/studio/episodes/e1','DELETE')).code,403,'CSRF required for deletes');
+  assert.equal((await bulk('episodes','set_status',['e1'],'draft')).code,403,'CSRF required for bulk');
+
 
   assert.equal((await call('/api/v1/studio/series/s1','PUT',form)).code,403);
   csrf=editorCsrf;
   assert.equal((await call('/api/v1/studio/series/s3','PUT',form)).code,403);
   assert.equal((await call('/api/v1/studio/series/s3','DELETE')).code,403,"Cannot delete another team's series");
+  assert.equal((await bulk('series','set_status',['s3'],'draft')).code,403,'Cannot modify another team');
+  assert.equal((await bulk('series','set_status',['s1'],'public')).code,403,'Editor grant cannot publish');
+  assert.equal((await bulk('series','delete',['s3'])).code,403,'Cannot bulk delete outside team');
+
   assert.equal((await call('/api/v1/studio/episodes/e1','DELETE')).code,403,'Editor cannot delete published episode without publisher permission');
 
   assert.equal((await call('/api/v1/studio/series/s1','PUT',{...form,featured:true})).code,403);
