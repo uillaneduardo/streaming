@@ -29,7 +29,7 @@ async function main(){
   await page.locator('[data-action="category-quick"]').click();
   await page.locator('#category-quick-name').fill('Categoria Navegador CI');
   await page.locator('[data-action="category-quick-save"]').click();
-  await page.locator('select[name="category"] option:checked').getByText('Categoria Navegador CI').waitFor();
+  await page.waitForFunction(()=>document.querySelector('select[name="category"]')?.value==='Categoria Navegador CI',{timeout:15000});
   await page.screenshot({path:path.join(out,'m2-category-quick-create.png'),fullPage:true});
   await page.locator('#modal-root [data-action="close-modal"]').last().click();
 
