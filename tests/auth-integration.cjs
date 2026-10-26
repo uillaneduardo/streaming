@@ -339,6 +339,22 @@ async function call(path,method='GET',body){
   assert.equal((await bulk('episodes','set_status',[episodeId],'published')).code,200,'Restore availability');
   assert.equal((await call(reviewPath('episode',episodeId)+'/submit','POST',{message:'x'.repeat(1001)})).code,400,
     'Review notes have size limits');
+
+  const beforeRestore=await call('/api/v1/studio/bootstrap');
+  const episodeStatus=beforeRestore.data.episodes.find(e=>e.id===episodeId).status;
+  const firstVersion=episodeHistory.data.versions.find(v=>v.snapshot.title==='Episódio piloto');
+  assert(firstVersion,'Original episode metadata exists in history');
+  assert.equal((await call(reviewPath('episode',episodeId)+'/restore','POST',
+    {versionId:firstVersion.id})).code,200,'Restore first episode metadata version');
+  const afterRestore=(await call('/api/v1/studio/bootstrap')).data.episodes.find(e=>e.id===episodeId);
+  assert.equal(afterRestore.title,'Episódio piloto','Version restore applied');
+  assert.equal(afterRestore.status,episodeStatus,'Restore must not silently change publication');
+  const restoredHistory=await call(reviewPath('episode',episodeId)+'/history');
+  assert(restoredHistory.data.versions.length>episodeHistory.data.versions.length,
+    'Restoring creates another immutable version');
+  assert.equal((await call(reviewPath('episode',episodeId)+'/restore','POST',
+    {versionId:999999999999})).code,404,'Cannot restore unrelated/nonexistent version');
+
   // Managed categories: independent registry, rename updates linked productions atomically.
   const category=await call('/api/v1/studio/categories','POST',{name:'Teste Editorial'});
   assert.equal(category.code,201,'Create category');
