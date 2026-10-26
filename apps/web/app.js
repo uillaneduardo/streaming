@@ -181,7 +181,7 @@ function openMediaPicker(field,kind){
  if(!root){root=document.createElement('div');root.id='media-picker-root';document.body.append(root)}
  root.innerHTML='<div class="media-picker-backdrop" data-action="media-picker-close">'+
  '<div class="media-picker-panel form-surface-light" role="dialog" aria-modal="true" aria-label="Escolher mídia">'+
- '<div class="row between"><h2>Escolher mídia</h2><button class="btn small" data-action="media-picker-close">✕</button></div>'+
+ '<div class="row between"><h2>Escolher mídia</h2><button class="btn small" data-action="media-picker-close" aria-label="Fechar">${studioIcon('x')}</button></div>'+
  '<p class="muted">Selecione uma imagem já enviada ou envie um novo arquivo.</p>'+
  '<div class="media-toolbar"><input class="input" id="media-picker-search" placeholder="Pesquisar por nome ou tag">'+
  '<select class="select" id="media-picker-kind">'+
@@ -526,8 +526,46 @@ function watchPage(eid){
  <div class="episode-list">${seq.map(epPublicRow).join('')}</div></div>`;
 }
 function missing(){return `<div class="container"><h1>Conteúdo não encontrado</h1><a class="btn" href="#/">Voltar ao início</a></div>`}
-const sideItems=[['dashboard','▦','Visão geral'],['series','▤','Séries'],['seasons','▥','Temporadas'],['episodes','▷','Episódios'],['media','▧','Biblioteca de mídia'],['schedule','◷','Calendário editorial'],['homepage','◈','CMS da página inicial'],['teams','♧','Equipes e permissões'],['settings','⚙','Configurações']];function side(){return `<aside class="sidebar" id="sidebar"><div class="row between"><div class="brand">CENA<em>LIVRE</em><div class="muted tiny" style="letter-spacing:0;font-weight:500">Studio</div></div><button class="btn small mobile-side-close" data-action="toggle-side">✕</button></div><div class="sidebar-label">Operação editorial</div>${sideItems.map(([p,ic,t])=>`<button data-action="route" data-path="/studio/${p}" class="side-link ${route.parts[1]===p?'active':''}"><span style="font-size:17px;width:21px">${ic}</span>${t}</button>`).join('')}<div class="sidebar-label">Plataforma</div><button class="side-link" data-action="route" data-path="/">↗ &nbsp; Visitar portal</button><button class="side-link" data-action="${hosted?'logout':'reset'}">${hosted?'⇥ &nbsp; Sair do Studio':'↻ &nbsp; Restaurar dados'}</button></aside>`}
-function studioFrame(content){return `<div class="admin">${side()}<div class="admin-main"><div class="admin-top"><button class="btn small mobile-menu" data-action="toggle-side">☰</button><strong style="font-size:13px">Studio</strong><div style="flex:1"></div><button class="btn small" data-action="route" data-path="/">Ver portal ↗</button></div><main class="admin-content">${content}</main></div></div>`}
+// One coherent icon system for Studio only: Lucide-style 24px line icons.
+// All icons use the same stroke, joins, cap and viewbox; no external CDN needed.
+const studioIconShapes={
+ 'layout-dashboard':'<rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/>',
+ 'clapperboard':'<path d="M4 11h16v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-9Zm0 0-1-4a2 2 0 0 1 1.5-2.4L17 2a2 2 0 0 1 2.4 1.5L20 7l-16 4ZM5 5l4 5M11 4l4 5M17 3l3 4"/>',
+ 'layers':'<path d="m12 2 9 5-9 5-9-5 9-5Zm-9 10 9 5 9-5M3 17l9 5 9-5"/>',
+ 'play':'<polygon points="6 3 20 12 6 21 6 3"/>',
+ 'images':'<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/>',
+ 'calendar-days':'<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M8 2v4M16 2v4M3 10h18M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/>',
+ 'panels-top-left':'<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 9v12"/>',
+ 'users':'<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M16 3.2a4 4 0 0 1 0 7.6M22 21v-2a4 4 0 0 0-3-3.87"/><circle cx="9" cy="7" r="4"/>',
+ 'settings':'<path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Zm7.4 4.8a7.9 7.9 0 0 0 0-1.6l2-1.5-2-3.4-2.3.9a7.9 7.9 0 0 0-1.4-.8L15.3 4h-4l-.4 2.4a7.9 7.9 0 0 0-1.4.8l-2.3-.9-2 3.4 2 1.5a7.9 7.9 0 0 0 0 1.6l-2 1.5 2 3.4 2.3-.9a7.9 7.9 0 0 0 1.4.8l.4 2.4h4l.4-2.4a7.9 7.9 0 0 0 1.4-.8l2.3.9 2-3.4-2-1.5Z" transform="translate(-1 -0.5)"/>',
+ 'external-link':'<path d="M15 3h6v6M10 14 21 3M21 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h6"/>',
+ 'log-out':'<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>',
+ 'rotate-ccw':'<path d="M3 11a9 9 0 1 1 2.7 6.4M3 3v8h8"/>',
+ 'menu':'<path d="M4 6h16M4 12h16M4 18h16"/>',
+ 'x':'<path d="M18 6 6 18M6 6l12 12"/>',
+ 'plus':'<path d="M12 5v14M5 12h14"/>',
+ 'pencil':'<path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z"/>',
+ 'trash-2':'<path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M6 6l1 15h10l1-15M10 10v7M14 10v7"/>',
+ 'upload':'<path d="M12 16V3M7 8l5-5 5 5M3 16v3a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-3"/>',
+ 'download':'<path d="M12 3v12m-5-5 5 5 5-5M4 17v3h16v-3"/>',
+ 'copy':'<rect x="8" y="8" width="13" height="13" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/>',
+ 'arrow-up':'<path d="M12 19V5m-7 7 7-7 7 7"/>',
+ 'arrow-down':'<path d="M12 5v14m-7-7 7 7 7-7"/>',
+ 'arrow-right':'<path d="M5 12h14m-7-7 7 7-7 7"/>',
+ 'eye':'<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/>',
+ 'check':'<path d="m5 12 4 4L19 6"/>',
+ 'search':'<circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/>',
+ 'grid-2x2':'<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
+ 'list':'<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
+ 'image-plus':'<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m3 19 6-6 3 3 3-3 6 6M16 7h4M18 5v4"/>',
+ 'filter':'<path d="M4 7h16M7 12h10M10 17h4"/>'
+};
+function studioIcon(name){
+ return '<svg class="studio-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">'+
+  (studioIconShapes[name]||studioIconShapes['images'])+'</svg>';
+}
+const sideItems=[['dashboard','layout-dashboard','Visão geral'],['series','clapperboard','Séries'],['seasons','layers','Temporadas'],['episodes','play','Episódios'],['media','images','Biblioteca de mídia'],['schedule','calendar-days','Calendário editorial'],['homepage','panels-top-left','CMS da página inicial'],['teams','users','Equipes e permissões'],['settings','settings','Configurações']];function side(){return `<aside class="sidebar" id="sidebar"><div class="row between"><div class="brand">CENA<em>LIVRE</em><div class="muted tiny" style="letter-spacing:0;font-weight:500">Studio</div></div><button class="btn small mobile-side-close" data-action="toggle-side">${studioIcon('x')}</button></div><div class="sidebar-label">Operação editorial</div>${sideItems.map(([p,ic,t])=>`<button data-action="route" data-path="/studio/${p}" class="side-link ${route.parts[1]===p?'active':''}"><span class="side-icon">${studioIcon(ic)}</span>${t}</button>`).join('')}<div class="sidebar-label">Plataforma</div><button class="side-link" data-action="route" data-path="/">${studioIcon('external-link')} Visitar portal</button><button class="side-link" data-action="${hosted?'logout':'reset'}">${hosted?studioIcon('log-out')+' Sair do Studio':studioIcon('rotate-ccw')+' Restaurar dados'}</button></aside>`}
+function studioFrame(content){return `<div class="admin">${side()}<div class="admin-main"><div class="admin-top"><button class="btn small mobile-menu" data-action="toggle-side">${studioIcon('menu')}</button><strong style="font-size:13px">Studio</strong><div style="flex:1"></div><button class="btn small" data-action="route" data-path="/">Ver portal ${studioIcon('external-link')}</button></div><main class="admin-content">${content}</main></div></div>`}
 function pageHead(title,subtitle,actions=''){return `<div class="pagehead"><div><h1>${title}</h1>${subtitle?'<p>'+subtitle+'</p>':''}</div><div class="row">${actions}</div></div>`}
 function stat(n,label){return `<div class="panel"><div class="stat-label">${label}</div><div class="stat-value">${n}</div></div>`}
 function dashboard(){const coming=db.episodes.filter(x=>state(x)==='Em breve').sort((a,b)=>new Date(a.releaseAt)-new Date(b.releaseAt));return pageHead('Visão geral','Acompanhe o catálogo e os próximos lançamentos.',`<button class="btn primary" data-action="create-series">+ Nova série</button>`)+`<div class="stat-grid">${stat(db.series.length,'Séries cadastradas')}${stat(db.episodes.length,'Episódios')}${stat(coming.length,'Estreias programadas')}${stat(db.teams.length,'Equipes')}</div><div class="two-column"><section class="panel"><h2>Próximas estreias</h2>${coming.length?coming.slice(0,6).map(x=>`<div class="schedule-line"><div class="smallcaps" style="color:#b25d4d">${dt(x.releaseAt)}</div><strong>${esc(seriesForEpisode(x)?.title)} · ${esc(x.title)}</strong><div class="muted tiny">T${by('seasons',x.seasonId)?.number}:E${x.number}</div></div>`).join(''):'<p class="muted">Nenhuma estreia agendada.</p>'}<button class="btn small" data-action="route" data-path="/studio/schedule">Abrir calendário</button></section><section class="panel"><h2>Produções em destaque</h2>${db.series.slice(0,4).map(s=>`<div class="item-card"><img src="${esc(s.banner)}" alt=""><div class="item-info"><h3>${esc(s.title)}</h3><p>${esc(s.category)} · ${epOrder(s.id).length} episódio(s)</p></div><button class="btn small" data-action="series-artwork" data-id="${s.id}">Imagens</button><button class="btn small" data-action="edit-series" data-id="${s.id}">Editar</button></div>`).join('')}</section></div>`}
@@ -1042,7 +1080,7 @@ if(route.parts[0]==='assistir'&&activeVideo===route.parts[1]){
  if(video){destroyYouTubePlayer();void mountYouTubePlayer(episode.id,video)}
 }
 }
-function modal(title,body){document.getElementById('modal-root').innerHTML=`<div class="modal-backdrop" data-action="close-modal"><div class="modal form-surface-light" role="dialog" aria-modal="true" aria-label="${esc(title)}"><div class="row between"><h2>${esc(title)}</h2><button class="btn small" data-action="close-modal">✕</button></div>${body}</div></div>`}
+function modal(title,body){document.getElementById('modal-root').innerHTML=`<div class="modal-backdrop" data-action="close-modal"><div class="modal form-surface-light" role="dialog" aria-modal="true" aria-label="${esc(title)}"><div class="row between"><h2>${esc(title)}</h2><button class="btn small" data-action="close-modal" aria-label="Fechar">${studioIcon('x')}</button></div>${body}</div></div>`}
 const field=(label,name,value='',type='text',extra='')=>`<div class="field"><label>${label}</label><input class="input" name="${name}" type="${type}" value="${esc(value)}" ${extra}></div>`;const area=(label,name,value='')=>`<div class="field span2"><label>${label}</label><textarea class="textarea" name="${name}">${esc(value)}</textarea></div>`;const select=(label,name,opts,selected)=>`<div class="field"><label>${label}</label><select class="select" name="${name}">${opts.map(x=>`<option value="${esc(x.id)}" ${x.id===selected?'selected':''}>${esc(x.title||x.name)}</option>`).join('')}</select></div>`;const submit=`<div class="span2 row between" style="margin-top:12px"><button type="button" class="btn" data-action="close-modal">Cancelar</button><button type="submit" class="btn primary">Salvar alterações</button></div>`;
 function openSeriesArtwork(seriesId){
  const s=by('series',seriesId);
