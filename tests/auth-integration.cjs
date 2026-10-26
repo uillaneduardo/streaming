@@ -93,6 +93,42 @@ async function call(path,method='GET',body){
     const data=await response.json().catch(()=>({}));
     return {status:response.status,data};
   }
+  // A real PNG larger than nginx's previous 1 MB default: upload and download through the proxy.
+  const zlib=require('node:zlib');
+  function chunk(label,payload){
+    const name=Buffer.from(label),body=Buffer.concat([name,payload]),out=Buffer.alloc(4);
+    out.writeUInt32BE(payload.length);
+    let crc=0xffffffff;
+    for(const byte of body){
+      crc^=byte;
+      for(let k=0;k<8;k++)crc=(crc>>>1)^((crc&1)?0xedb88320:0);
+    }
+    const checksum=Buffer.alloc(4);checksum.writeUInt32BE((crc^0xffffffff)>>>0);
+    return Buffer.concat([out,body,checksum]);
+  }
+  const width=1024,height=512,rgba=randomBytes(width*height*4);
+  const scanlines=[];
+  for(let row=0;row<height;row++){
+    scanlines.push(Buffer.from([0]),rgba.subarray(row*width*4,(row+1)*width*4));
+  }
+  const ihdr=Buffer.alloc(13);ihdr.writeUInt32BE(width,0);ihdr.writeUInt32BE(height,4);
+  ihdr[8]=8;ihdr[9]=6;
+  const largePng=Buffer.concat([
+    Buffer.from([137,80,78,71,13,10,26,10]),
+    chunk('IHDR',ihdr),chunk('IDAT',zlib.deflateSync(Buffer.concat(scanlines),{level:1})),
+    chunk('IEND',Buffer.alloc(0))
+  ]);
+  assert(largePng.length>1024*1024,'Large fixture must exceed the old nginx body limit');
+  const big=await putImage('/api/v1/studio/media/upload','POST',largePng,{
+    'x-media-name':'banner-real-grande.png','x-media-kind':'banner','x-media-tags':'banner,teste'
+  });
+  assert.equal(big.status,201,'2 MB PNG must pass through Nginx and persist to storage');
+  const stored=await fetch('http://localhost:8088/api/v1/media/files/'+big.data.id,{headers:{Cookie:cookie}});
+  assert.equal(stored.status,200,'Large media must be readable from Docker volume');
+  const persisted=Buffer.from(await stored.arrayBuffer());
+  assert(persisted.equals(largePng),'Media round-trip must retain every uploaded byte');
+  assert.equal((await call('/api/v1/studio/media/'+big.data.id,'DELETE')).code,200,'Large media clean-up');
+
   const up=await putImage('/api/v1/studio/media/upload','POST',bytes,
     {'x-media-name':encodeURIComponent('Capa da série.png'),'x-media-kind':'poster',
      'x-media-tags':encodeURIComponent('ficção, destaque')});
