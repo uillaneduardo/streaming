@@ -427,7 +427,82 @@ function home(){let b=[...db.banners].sort((a,z)=>a.order-z.order).find(bannerAc
 function explore(){let p=new URLSearchParams(route.path.split('?')[1]||''),cat=p.get('cat');if(cat&&!searchTerm)filterCategory=cat;const cats=['Todas',...new Set(db.series.map(x=>x.category))];let list=db.series.filter(x=>(filterCategory==='Todas'||x.category===filterCategory)&&`${x.title} ${x.summary} ${x.category}`.toLowerCase().includes(searchTerm.toLowerCase()));return `<div class="container"><div class="section-head" style="margin-top:14px"><div><div class="eyebrow">Catálogo aberto</div><h1 style="font-size:36px;margin:8px 0">Explore as séries</h1><p class="muted">Produções originais e independentes, gratuitas para assistir.</p></div></div><div class="row" style="margin:25px 0"><input id="public-search" class="input searchbar" placeholder="Buscar séries, histórias ou categorias..." value="${esc(searchTerm)}"></div><div class="pillset" style="margin-bottom:25px">${cats.map(c=>`<button class="pill ${filterCategory===c?'active':''}" data-action="filter-cat" data-cat="${esc(c)}">${esc(c)}</button>`).join('')}</div><div class="row between" style="margin:12px 0 20px"><span class="muted tiny">${list.length} série(s)</span>${viewSwitch()}</div><div id="explore-results">${cardGrid(list)}</div></div>`}
 function epPublicRow(e){const s=seriesForEpisode(e),se=by('seasons',e.seasonId),available=playable(e);return `<button class="episode-row" data-action="${available?'watch':'go-series'}" data-id="${available?e.id:s?.id}"><img class="episode-img" loading="lazy" src="${esc(e.thumbnail)}" alt=""><div class="episode-meta"><strong>${esc(s?.title||'Série')} · T${se?.number}:E${e.number} — ${esc(e.title)}</strong><p>${esc(e.summary)}</p><span class="muted tiny">${e.duration||'?'} min · ${available?'Disponível agora':state(e)==='Em breve'?'Estreia '+dt(e.releaseAt):state(e)}</span></div><span class="tag">${available?'▶ Assistir':state(e)}</span></button>`}
 function seriesPage(sid){const s=by('series',sid);if(!s)return missing();const list=seasons(sid),defaultSe=list[0],currentSe=list.find(x=>x.id===studioSection)||defaultSe;return `<div class="container"><a class="muted tiny" href="#/explorar">← Voltar ao catálogo</a><div class="series-hero"><img class="series-poster" src="${esc(s.poster)}" alt="Pôster de ${esc(s.title)}"><div><div class="eyebrow">${esc(s.category)} · Produção original</div><h1>${esc(s.title)}</h1><p>${esc(s.summary)}</p><div class="row" style="flex-wrap:wrap"><span class="tag">${list.length} temporada(s)</span><span class="tag">${epOrder(sid).length} episódio(s)</span><span class="tag">Gratuito</span></div><div class="actions"><button class="btn primary" data-action="watch" data-id="${esc(epOrder(sid).find(playable)?.id||'')}" ${epOrder(sid).some(playable)?'':'disabled'}>▶ Assistir primeiro disponível</button><button class="btn" data-action="fav" data-id="${esc(sid)}">${db.saved.includes(sid)?'✓ Na minha lista':'＋ Minha lista'}</button></div></div></div><div class="section-head"><h2>Episódios</h2><select id="public-season" class="select" style="max-width:230px">${list.map(x=>`<option value="${x.id}" ${x.id===currentSe?.id?'selected':''}>Temporada ${x.number} — ${esc(x.title)}</option>`).join('')}</select></div><div class="episode-list">${(currentSe?eps(currentSe.id):[]).map(epPublicRow).join('')}</div></div>`}
-function watchPage(eid){const e=by('episodes',eid);if(!e)return missing();const s=seriesForEpisode(e);if(!s)return missing();const seq=epOrder(s.id),index=seq.findIndex(x=>x.id===eid),prev=[...seq.slice(0,index)].reverse().find(playable),next=seq.slice(index+1).find(playable),se=by('seasons',e.seasonId);const ready=playable(e);const idVideo=ytId(e.youtube);const started=activeVideo===eid&&idVideo&&ready;return `<div class="container watch-layout"><div class="row between" style="margin-bottom:17px"><a class="muted tiny" href="#/serie/${s.id}">← ${esc(s.title)}</a><span class="muted tiny">Temporada ${se.number} · Episódio ${e.number}</span></div><div class="player">${started?`<iframe src="https://www.youtube-nocookie.com/embed/${encodeURIComponent(idVideo)}?autoplay=1&rel=0" title="${esc(e.title)}" allow="accelerometer;autoplay;encrypted-media;gyroscope;picture-in-picture" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>`:`<div class="player-placeholder" style="background-image:${heroImg(e.thumbnail)}"><button class="btn primary" data-action="play-video" data-id="${esc(e.id)}" ${!ready?'disabled':''}>${ready?'▶ '+(idVideo?'Reproduzir no YouTube':'Visualizar episódio demonstrativo'):'🔒 '+state(e)}</button></div>`}</div>${!idVideo&&ready?`<div class="notice" style="margin-top:12px">Este episódio usa mídia fictícia para demonstração. Cadastre uma URL do YouTube no Studio para testar a reprodução incorporada.</div>`:''}<div class="section-head"><div><div class="eyebrow">T${se.number}:E${e.number} · ${e.duration||'?'} min</div><h2 style="margin-top:7px">${esc(e.title)}</h2></div></div><p class="muted" style="line-height:1.7">${esc(e.summary)}</p><div class="controls"><button class="btn" data-action="watch" data-id="${prev?.id||''}" ${prev?'':'disabled'}>← Episódio anterior</button><button class="btn primary" data-action="watch" data-id="${next?.id||''}" ${next?'':'disabled'}>Próximo disponível →</button></div><div class="section-head"><h2>Todos os episódios de ${esc(s.title)}</h2></div><div class="episode-list">${seq.map(epPublicRow).join('')}</div></div>`}
+// YouTube IFrame API: play/pause can be controlled externally. Quality, audio and captions
+// stay in the native YouTube menu, because they are not exposed as full track selectors.
+let ytApiPromise=null,ytPlayer=null,ytMountedEpisode='';
+function ensureYouTubeAPI(){
+ if(window.YT&&window.YT.Player)return Promise.resolve(window.YT);
+ if(ytApiPromise)return ytApiPromise;
+ ytApiPromise=new Promise((resolve,reject)=>{
+   const prior=window.onYouTubeIframeAPIReady;
+   window.onYouTubeIframeAPIReady=()=>{if(typeof prior==='function')prior();resolve(window.YT)};
+   const script=document.createElement('script');script.src='https://www.youtube.com/iframe_api';script.async=true;
+   script.onerror=()=>reject(new Error('Não foi possível carregar o player do YouTube.'));
+   document.head.appendChild(script);
+ });
+ return ytApiPromise;
+}
+function playerButtonState(isPlaying){
+ const control=document.querySelector('[data-action="player-toggle"]');
+ if(!control)return;
+ control.textContent=isPlaying?'❚❚ Pausar':'▶ Reproduzir';
+ control.setAttribute('aria-label',isPlaying?'Pausar vídeo':'Reproduzir vídeo');
+}
+function destroyYouTubePlayer(){
+ if(ytPlayer&&typeof ytPlayer.destroy==='function'){try{ytPlayer.destroy()}catch{}}
+ ytPlayer=null;ytMountedEpisode='';
+}
+async function mountYouTubePlayer(episodeId,videoId){
+ if(!document.getElementById('cenalivre-youtube')||ytMountedEpisode===episodeId)return;
+ ytMountedEpisode=episodeId;
+ try{
+  const YT=await ensureYouTubeAPI();
+  if(!document.getElementById('cenalivre-youtube')||!location.hash.includes('/assistir/'+episodeId))return;
+  ytPlayer=new YT.Player('cenalivre-youtube',{
+   videoId:videoId,
+   playerVars:{autoplay:1,controls:1,playsinline:1,rel:0,iv_load_policy:3,hl:'pt-BR',origin:location.origin},
+   events:{
+    onReady:()=>playerButtonState(false),
+    onStateChange:event=>playerButtonState(event.data===YT.PlayerState.PLAYING),
+    onError:()=>{const hint=document.getElementById('player-hint');if(hint)hint.textContent='Este vídeo não pôde ser reproduzido aqui. Confira se a incorporação está permitida no YouTube.'}
+   }
+  });
+ }catch(error){
+  const hint=document.getElementById('player-hint');if(hint)hint.textContent=error.message;
+  ytMountedEpisode='';
+ }
+}
+function toggleYouTubePlayback(){
+ if(!ytPlayer||typeof ytPlayer.getPlayerState!=='function'){toast('Aguarde o carregamento do vídeo.');return}
+ const state=ytPlayer.getPlayerState();
+ if(state===window.YT.PlayerState.PLAYING)ytPlayer.pauseVideo();
+ else ytPlayer.playVideo();
+}
+function watchPage(eid){
+ const e=by('episodes',eid);if(!e)return missing();
+ const series=seriesForEpisode(e);if(!series)return missing();
+ const seq=epOrder(series.id),index=seq.findIndex(x=>x.id===eid);
+ const prev=[...seq.slice(0,index)].reverse().find(playable),next=seq.slice(index+1).find(playable);
+ const season=by('seasons',e.seasonId),ready=playable(e),idVideo=ytId(e.youtube);
+ const started=activeVideo===eid&&idVideo&&ready;
+ return `<div class="container watch-layout"><div class="row between" style="margin-bottom:17px">
+ <a class="muted tiny" href="#/serie/${series.id}">← ${esc(series.title)}</a>
+ <span class="muted tiny">Temporada ${season.number} · Episódio ${e.number}</span></div>
+ <div class="player">${started?'<div id="cenalivre-youtube" class="youtube-frame"></div>':
+ `<div class="player-placeholder" style="background-image:${heroImg(e.thumbnail)}">
+ <button class="btn primary" data-action="play-video" data-id="${esc(e.id)}" ${!ready?'disabled':''}>
+ ${ready?'▶ '+(idVideo?'Assistir episódio':'Vídeo indisponível'):'🔒 '+state(e)}</button></div>`}</div>
+ ${started?`<div class="player-minimal-bar"><button type="button" class="btn small" data-action="player-toggle" aria-label="Reproduzir ou pausar vídeo">▶ Reproduzir</button>
+ <span class="muted tiny" id="player-hint">Qualidade, áudio e legendas: use ⚙ nos controles do vídeo, quando disponíveis.</span></div>`:''}
+ ${!idVideo&&ready?'<div class="notice" style="margin-top:12px">Este episódio ainda não possui um vídeo do YouTube válido.</div>':''}
+ <div class="section-head"><div><div class="eyebrow">T${season.number}:E${e.number} · ${e.duration||'?'} min</div>
+ <h2 style="margin-top:7px">${esc(e.title)}</h2></div></div>
+ <p class="muted" style="line-height:1.7">${esc(e.summary)}</p>
+ <div class="controls"><button class="btn" data-action="watch" data-id="${prev?.id||''}" ${prev?'':'disabled'}>← Episódio anterior</button>
+ <button class="btn primary" data-action="watch" data-id="${next?.id||''}" ${next?'':'disabled'}>Próximo episódio →</button></div>
+ <div class="section-head"><h2>Todos os episódios de ${esc(series.title)}</h2></div>
+ <div class="episode-list">${seq.map(epPublicRow).join('')}</div></div>`;
+}
 function missing(){return `<div class="container"><h1>Conteúdo não encontrado</h1><a class="btn" href="#/">Voltar ao início</a></div>`}
 const sideItems=[['dashboard','▦','Visão geral'],['series','▤','Séries'],['seasons','▥','Temporadas'],['episodes','▷','Episódios'],['media','▧','Biblioteca de mídia'],['schedule','◷','Calendário editorial'],['homepage','◈','CMS da página inicial'],['teams','♧','Equipes e permissões'],['settings','⚙','Configurações']];function side(){return `<aside class="sidebar" id="sidebar"><div class="row between"><div class="brand">CENA<em>LIVRE</em><div class="muted tiny" style="letter-spacing:0;font-weight:500">Studio de produção</div></div><button class="btn small mobile-side-close" data-action="toggle-side">✕</button></div><div class="sidebar-label">Operação editorial</div>${sideItems.map(([p,ic,t])=>`<button data-action="route" data-path="/studio/${p}" class="side-link ${route.parts[1]===p?'active':''}"><span style="font-size:17px;width:21px">${ic}</span>${t}</button>`).join('')}<div class="sidebar-label">Plataforma</div><button class="side-link" data-action="route" data-path="/">↗ &nbsp; Visitar portal</button><button class="side-link" data-action="${hosted?'logout':'reset'}">${hosted?'⇥ &nbsp; Sair do Studio':'↻ &nbsp; Restaurar dados de exemplo'}</button><div class="notice" style="margin:25px 7px 5px;font-size:11px">${hosted?'Painel conectado ao servidor. Os dados salvos são persistentes.':'Demonstração local, sem autenticação.'}</div></aside>`}
 function studioFrame(content){return `<div class="admin">${side()}<div class="admin-main"><div class="admin-top"><button class="btn small mobile-menu" data-action="toggle-side">☰</button><strong style="font-size:13px">Studio</strong><span class="app-version" title="Versão instalada do frontend">v${esc(frontendVersion)}</span><div style="flex:1"></div><span class="muted tiny">${hosted?'● Sessão autenticada':'● Ambiente demonstrativo'}</span><button class="btn small" data-action="route" data-path="/">Ver portal ↗</button></div><main class="admin-content">${content}</main></div></div>`}
@@ -481,7 +556,13 @@ if(route.studio){
   if(hosted&&!studioUser){root.innerHTML=studioLogin();return}
   if(hosted&&!studioData){root.innerHTML=publicNav()+'<main class="container"><p>Carregando Studio...</p></main>';return}
   root.innerHTML=studioPage();return
-}let content=route.path==='/'?home():route.parts[0]==='explorar'?explore():route.parts[0]==='serie'?seriesPage(route.parts[1]):route.parts[0]==='assistir'?watchPage(route.parts[1]):route.parts[0]==='entrar'?'<main class="container"><button class="btn primary" data-action="go-studio">Entrar no Studio</button></main>':missing();root.innerHTML=publicNav()+content+`<footer class="footer">CenaLivre · Séries independentes · <span class="app-version">Frontend v${esc(frontendVersion)}</span></footer>`}
+}let content=route.path==='/'?home():route.parts[0]==='explorar'?explore():route.parts[0]==='serie'?seriesPage(route.parts[1]):route.parts[0]==='assistir'?watchPage(route.parts[1]):route.parts[0]==='entrar'?'<main class="container"><button class="btn primary" data-action="go-studio">Entrar no Studio</button></main>':missing();root.innerHTML=publicNav()+content+`<footer class="footer">CenaLivre · Séries independentes · <span class="app-version">Frontend v${esc(frontendVersion)}</span></footer>`;
+if(route.parts[0]==='assistir'&&activeVideo===route.parts[1]){
+ const episode=by('episodes',route.parts[1]);
+ const video=episode&&playable(episode)?ytId(episode.youtube):null;
+ if(video){destroyYouTubePlayer();void mountYouTubePlayer(episode.id,video)}
+}
+}
 function modal(title,body){document.getElementById('modal-root').innerHTML=`<div class="modal-backdrop" data-action="close-modal"><div class="modal form-surface-light" role="dialog" aria-modal="true" aria-label="${esc(title)}"><div class="row between"><h2>${esc(title)}</h2><button class="btn small" data-action="close-modal">✕</button></div>${body}</div></div>`}
 const field=(label,name,value='',type='text',extra='')=>`<div class="field"><label>${label}</label><input class="input" name="${name}" type="${type}" value="${esc(value)}" ${extra}></div>`;const area=(label,name,value='')=>`<div class="field span2"><label>${label}</label><textarea class="textarea" name="${name}">${esc(value)}</textarea></div>`;const select=(label,name,opts,selected)=>`<div class="field"><label>${label}</label><select class="select" name="${name}">${opts.map(x=>`<option value="${esc(x.id)}" ${x.id===selected?'selected':''}>${esc(x.title||x.name)}</option>`).join('')}</select></div>`;const submit=`<div class="span2 row between" style="margin-top:12px"><button type="button" class="btn" data-action="close-modal">Cancelar</button><button type="submit" class="btn primary">Salvar alterações</button></div>`;
 function openEditor(type,entityId){const editing=!!entityId,x=editing?by(type,entityId):null;let body='';if(type==='series'){body=`<form class="form-grid" data-form="series" data-id="${entityId||''}">${field('Título','title',x?.title,'text','required')}${field('Categoria','category',x?.category||'Documentário','text','required')}${area('Sinopse','summary',x?.summary)}${mediaField('Pôster vertical','poster',x?.poster||img('new-poster',650,900),'poster')}${mediaField('Banner horizontal','banner',x?.banner||img('new-banner',1300,700),'banner')}<div class="field span2"><label>Equipes responsáveis (selecione uma ou mais)</label><div class="pillset">${db.teams.map(t=>`<label class="pill"><input type="checkbox" name="teamIds" value="${t.id}" ${(x?.teamIds||[]).includes(t.id)?'checked':''}> ${esc(t.name)}</label>`).join('')}</div></div><label class="span2"><input type="checkbox" name="featured" ${x?.featured?'checked':''}> Destaque no portal</label>${submit}</form>`}else if(type==='seasons'){body=`<form class="form-grid" data-form="seasons" data-id="${entityId||''}">${select('Série','seriesId',db.series,x?.seriesId)}${field('Número','number',x?.number||seasons(db.series[0]?.id).length+1,'number','min="1" required')}${field('Título da temporada','title',x?.title||'Nova temporada','text','required')}${submit}</form>`}else if(type==='episodes'){body=`<form class="form-grid" data-form="episodes" data-id="${entityId||''}">${select('Temporada','seasonId',db.seasons.map(s=>({...s,title:`${by('series',s.seriesId)?.title} — T${s.number}`})),x?.seasonId)}${field('Número do episódio','number',x?.number||1,'number','min="1" required')}${field('Título','title',x?.title,'text','required')}${field('Duração estimada (min)','duration',x?.duration||20,'number','min="1"')}${area('Sinopse','summary',x?.summary)}${field('URL ou ID do vídeo YouTube','youtube',x?.youtube)}${mediaField('Thumbnail do episódio','thumbnail',x?.thumbnail||img('new-episode',1200,700),'thumbnail')}${field('Disponível a partir de','releaseAt',(x?datetimeLocal(x.releaseAt):future(1)),'datetime-local','required')}${field('Disponível até (opcional)','endAt',(x?datetimeLocal(x.endAt):''),'datetime-local')}${select('Estado editorial','status',[{id:'published',title:'Aprovado / publicado'},{id:'scheduled',title:'Agendado'},{id:'draft',title:'Rascunho'},{id:'suspended',title:'Suspenso'}],x?.status||'scheduled')}${submit}</form>`}else if(type==='banners'){body=`<form class="form-grid" data-form="banners" data-id="${entityId||''}">${field('Título','title',x?.title,'text','required')}${field('Prioridade (menor primeiro)','order',x?.order||1,'number','min="1"')}${area('Texto de apoio','subtitle',x?.subtitle)}${mediaField('Banner desktop','image',x?.image||img('new-campaign',1400,800),'banner')}${mediaField('Banner mobile (opcional)','mobileImage',x?.mobileImage,'banner')}${select('Destino: série','target',db.series,x?.target)}${field('Início da campanha','startAt',(x?datetimeLocal(x.startAt):future(1)),'datetime-local')}${field('Fim da campanha','endAt',(x?datetimeLocal(x.endAt):''),'datetime-local')}<label class="span2"><input type="checkbox" name="active" ${x?.active!==false?'checked':''}> Campanha habilitada</label>${submit}</form>`}else if(type==='teams'){body=`<form class="form-grid" data-form="teams" data-id="${entityId||''}">${field('Nome da equipe','name',x?.name,'text','required')}${field('Descrição','description',x?.description)}${submit}</form>`}else if(type==='members'){body=`<form class="form-grid" data-form="members" data-id="${entityId||''}">${field('Nome','name',x?.name,'text','required')}${field('E-mail','email',x?.email,'email','required')}${select('Equipe','teamId',db.teams,x?.teamId)}${select('Papel demonstrativo','role',[{id:'Gestora',title:'Gestora'},{id:'Produtor',title:'Produtor'},{id:'Editor',title:'Editor'},{id:'Publicador',title:'Publicador'},{id:'Colaborador',title:'Colaborador'}],x?.role||'Editor')}${submit}</form>`}else if(type==='media'){body=`<form class="form-grid" data-form="media">${field('Nome do arquivo','name','','text','required')}${field('URL da imagem','url','','url','required')}${submit}</form>`}if(hosted&&type==='series'){
@@ -516,6 +597,7 @@ function formSubmit(form){const type=form.dataset.form;if(!type)return;
 if(hosted){if(['series','seasons','episodes','teams','members','banners'].includes(type)){void saveRemoteEntity(form);}else toast('Esta operação ainda não está habilitada.');return;}
 const f=new FormData(form),v=Object.fromEntries(f.entries());if(type==='episodes'&&v.endAt&&v.releaseAt&&new Date(v.endAt)<=new Date(v.releaseAt)){toast('O término precisa ser posterior à estreia.');return}if(type==='banners'&&v.endAt&&v.startAt&&new Date(v.endAt)<=new Date(v.startAt)){toast('O fim da campanha precisa ser posterior ao início.');return}if(type==='series'){v.slug=slug(v.title);v.teamIds=f.getAll('teamIds');v.featured=f.has('featured')}if(type==='banners'){v.active=f.has('active');v.order=Number(v.order)||1}if(type==='episodes'){v.number=Number(v.number);v.duration=Number(v.duration);v.status=v.status||'scheduled'}if(type==='seasons')v.number=Number(v.number);if(type==='series'&&!v.teamIds.length){toast('Selecione uma equipe responsável.');return}const old=form.dataset.id&&by(type,form.dataset.id);if(old)Object.assign(old,v);else db[type].push({id:id(type[0]),...v});save();document.getElementById('modal-root').innerHTML='';render();toast('Alterações salvas nesta demonstração.')}
 function handle(action,el){const eid=el.dataset.id;
+if(action==='player-toggle'){toggleYouTubePlayback();return}
 if(action==='retry-public'){window.location.reload();return}
 if(action==='settings-jump'){document.getElementById(el.dataset.target)?.scrollIntoView({behavior:'smooth',block:'start'});return}
 if(action==='media-picker-close'){closeMediaPicker();return}
@@ -617,7 +699,7 @@ if(e.target.matches('.media-field [name]')){
  const preview=e.target.closest('.media-field').querySelector('.media-field-preview');
  if(preview)preview.innerHTML=e.target.value?'<img src="'+esc(e.target.value)+'" alt="Prévia">':'<span class="muted">Nenhuma imagem selecionada</span>';
 }
-if(e.target.id==='public-search'){searchTerm=e.target.value;document.getElementById('explore-results').innerHTML=cardGrid(db.series.filter(x=>(filterCategory==='Todas'||x.category===filterCategory)&&`${x.title} ${x.summary} ${x.category}`.toLowerCase().includes(searchTerm.toLowerCase())))}});window.addEventListener('hashchange',()=>{studioSection='';render()});
+if(e.target.id==='public-search'){searchTerm=e.target.value;document.getElementById('explore-results').innerHTML=cardGrid(db.series.filter(x=>(filterCategory==='Todas'||x.category===filterCategory)&&`${x.title} ${x.summary} ${x.category}`.toLowerCase().includes(searchTerm.toLowerCase())))}});window.addEventListener('hashchange',()=>{destroyYouTubePlayer();studioSection='';render()});
 render();
 // A versão identifica os arquivos que o Nginx realmente está servindo.
 if(hosted){
