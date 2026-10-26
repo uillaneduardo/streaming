@@ -22,6 +22,9 @@ services:
       DB_NAME: ${DB_NAME:-cenalivre}
       DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      MEDIA_DIR: /srv/media
+    volumes:
+      - cenalivre_media:/srv/media
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -60,3 +63,4 @@ services:
     restart: unless-stopped
 volumes:
   cenalivre_db:
+  cenalivre_media:
