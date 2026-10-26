@@ -1,9 +1,13 @@
 import Fastify from "fastify";
 import type { RowDataPacket } from "mysql2";
 import { pool } from "./db.js";
+import {registerAuth} from "./auth.js";
+import {registerStudio} from "./studio.js";
 import { publicEpisodeState, sanitizedYoutubeId } from "./domain/release.js";
 
-const app = Fastify({ logger: true, trustProxy: false, bodyLimit:1024*1024 });
+const app = Fastify({ logger: true, trustProxy: true, bodyLimit:1024*1024 });
+registerAuth(app);
+registerStudio(app);
 type Row = RowDataPacket & Record<string, unknown>;
 const records = async (sql:string):Promise<Row[]> => {
   const [rows] = await pool.query<RowDataPacket[]>(sql);
@@ -71,6 +75,7 @@ app.get<{Params:{id:string}}>("/api/v1/public/episodes/:id",async (request,reply
   return {id:e.id,title:e.title,summary:e.summary,availability:state,releaseAt:iso(e.release_at),endAt:iso(e.end_at),youtube:state==="available"?sanitizedYoutubeId(e.youtube_id):null};
 });
 app.setErrorHandler((error,request,reply)=>{
+  if(error.validation) return reply.code(400).send({error:"bad_request"});
   app.log.error({err:error,path:request.url},"API error");
   reply.code(500).send({error:"internal_error"});
 });
