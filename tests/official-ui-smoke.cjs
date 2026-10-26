@@ -124,3 +124,21 @@ assert.match(css,/\.admin \.input,.admin \.select,.admin \.textarea/,
 assert.match(css,/\.cms-panel-head/,'CMS actions responsive');
 assert.match(css,/\.cms-table/,'CMS listing style present');
 console.log('CMS, banners, editorial calendar and form spacing: OK');
+
+for(const feature of ['function artworkImage(','function openSeriesArtwork(','series-artwork',
+ 'data-artwork-fallback','data-artwork-kind','hero-artwork-img',
+ 'poster-image','series-poster-wrap','home-episode-image','artwork-unavailable',
+ 'function studioIcon(','const studioIconShapes=',"studioIcon('images')"]){
+ assert.ok(js.includes(feature),'Missing artwork/icon feature: '+feature);
+}
+for(const icon of ['layout-dashboard','clapperboard','layers','play','images','calendar-days',
+ 'panels-top-left','users','settings','external-link','log-out','menu','x','pencil','upload']){
+ assert.ok(js.includes("'"+icon+"':")||js.includes("'"+icon+"'"),'Studio icon missing '+icon);
+}
+assert.match(css,/\.hero \.hero-artwork/,'Hero artwork geometry');
+assert.match(css,/\.poster-img>\.poster-image/,'Posters must show real img tags');
+assert.match(css,/\.artwork-unavailable/,'Unresolved broken files need a fallback');
+assert.match(css,/\.studio-icon/,'Unified Studio icon style');
+assert.ok(!js.includes('style="background-image:${heroImg(s.poster)}"'),
+ 'Series cards must not rely on empty CSS backgrounds');
+console.log('Referências de mídias, fallback visual e ícones Studio: OK');
