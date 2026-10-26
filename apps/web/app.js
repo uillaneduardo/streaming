@@ -869,6 +869,120 @@ function refreshEditorialPanel(type){
 function scheduleAdmin(){return pageHead('Calendário editorial','Gerencie datas de estreia e publicação.')+editorialPanel('schedule')}
 function homepageAdmin(){return pageHead('CMS da página inicial','Organize campanhas e seções do portal.')+
  editorialPanel('banners')+editorialPanel('sections')}
+
+let pendingEditorial=null;
+function openSectionEditor(sectionId){
+ const x=sectionId?db.homeSections.find(item=>item.id===sectionId):null;
+ const opts=Object.entries(editorialKindLabels).map(([id,name])=>({id,title:name}));
+ const body='<form id="editorial-section-form" class="form-grid" data-id="'+esc(sectionId||'')+'">'+
+  field('Nome da seção','title',x?.title||'','text','required maxlength="160"')+
+  select('Conteúdo exibido','kind',opts,x?.kind||'featured')+
+  '<label class="span2 section-check"><input type="checkbox" name="active" '+(x?.active!==false?'checked':'')+
+  '> Exibir na página inicial</label>'+submit+'</form>';
+ modal(sectionId?'Editar seção':'Nova seção',body);
+}
+async function persistSection(form){
+ const fd=new FormData(form),id=form.dataset.id||'',submitBtn=form.querySelector('[type="submit"]');
+ if(submitBtn)submitBtn.disabled=true;
+ try{
+  await apiRequest('/api/v1/studio/sections'+(id?'/'+encodeURIComponent(id):''),{
+   method:id?'PUT':'POST',
+   body:JSON.stringify({title:String(fd.get('title')||'').trim(),kind:String(fd.get('kind')||''),
+    active:fd.has('active')})
+  });
+  await fetchStudioData();await refreshPublicCatalog();
+  document.getElementById('modal-root').innerHTML='';
+  render();toast('Seção salva.');
+ }catch(error){toast(error.message||'Não foi possível salvar a seção.');if(submitBtn)submitBtn.disabled=false}
+}
+async function moveEditorialSection(id,direction){
+ if(!studioUser?.isAdmin){toast('Você não tem permissão para reorganizar seções.');return;}
+ const ids=db.homeSections.map(s=>s.id),i=ids.indexOf(id),j=i+direction;
+ if(i<0||j<0||j>=ids.length)return;
+ [ids[i],ids[j]]=[ids[j],ids[i]];
+ try{
+  await apiRequest('/api/v1/studio/sections/order',{method:'PUT',body:JSON.stringify({ids})});
+  await fetchStudioData();await refreshPublicCatalog();render();toast('Ordem atualizada.');
+ }catch(error){toast(error.message||'Não foi possível alterar a ordem.')}
+}
+function editorialErrorMessage(error){
+ const errors={
+  invalid_section:'Preencha o nome e escolha um tipo válido.',
+  section_not_found:'Seção não encontrada.',
+  banner_not_found:'Banner não encontrado.',
+  sections_changed:'As seções foram modificadas. Atualize a página.',
+  item_not_found:'Um item selecionado não está mais disponível.',
+  invalid_bulk_request:'Seleção inválida. Escolha até 100 itens diferentes.',
+  forbidden:'Você não tem permissão para executar esta ação.',
+  publish_denied:'Você não tem permissão para alterar um episódio publicado.',
+  episode_missing_release_date:'Defina a estreia antes de publicar ou agendar.',
+  invalid_schedule:'Confira as datas. O término deve ser posterior à estreia.',
+  season_has_episodes:'Remova os episódios vinculados antes de excluir a temporada.'
+ };
+ return errors[error.message]||error.message||'Não foi possível concluir.';
+}
+function prepareEditorialOperation(type,ids,operation){
+ if(!ids.length)return;
+ if(ids.length>100){toast('Selecione até 100 itens.');return;}
+ const valid=['banners','sections','schedule'];
+ if(!valid.includes(type))return;
+ if(!['active:true','active:false','delete','reschedule','status:draft','status:scheduled',
+   'status:published','status:suspended'].includes(operation))return;
+ pendingEditorial={type,ids:ids.slice(),operation};
+ const names=ids.map(id=>(type==='schedule'?by('episodes',id):
+   type==='sections'?db.homeSections.find(s=>s.id===id):by('banners',id))?.title).filter(Boolean);
+ if(operation==='reschedule'){
+  modal('Reagendar episódios','<form id="editorial-reschedule-form" class="stack">'+
+   '<p class="muted">'+ids.length+' episódio(s) selecionado(s).</p>'+
+   field('Nova estreia','releaseAt',future(1),'datetime-local','required')+
+   field('Novo término (opcional)','endAt','','datetime-local')+
+   '<p class="muted tiny">A operação preserva o estado editorial de cada episódio.</p>'+
+   '<div class="row between"><button type="button" class="btn" data-action="close-modal">Cancelar</button>'+
+   '<button type="submit" class="btn primary">Confirmar datas</button></div></form>');
+  return;
+ }
+ const label=operation==='delete'?'Excluir':operation.startsWith('status:')?'Alterar estado':'Alterar visibilidade';
+ const caution=operation==='delete'?'Esta ação é permanente e não pode ser desfeita.':
+ 'O portal será atualizado conforme os estados e as datas de publicação.';
+ const html='<div class="catalog-bulk-confirm">'+
+  '<p><strong>'+ids.length+' '+(ids.length===1?'item selecionado':'itens selecionados')+'</strong></p>'+
+  '<ul>'+names.slice(0,6).map(n=>'<li>'+esc(n)+'</li>').join('')+
+  (names.length>6?'<li>e mais '+(names.length-6)+'...</li>':'')+'</ul>'+
+  '<p class="muted">'+caution+'</p><p class="muted tiny">Se algum item não puder ser alterado, a operação inteira será cancelada.</p>'+
+  '<div class="row between"><button type="button" class="btn" data-action="close-modal">Cancelar</button>'+
+  '<button type="button" class="btn primary '+(operation==='delete'?'catalog-confirm-danger':'')+
+  '" data-action="editorial-confirm">'+(operation==='delete'?'Confirmar exclusão':'Confirmar alteração')+
+  '</button></div></div>';
+ modal(label+' itens',html);
+}
+async function runEditorialOperation(button,dateInfo){
+ if(!pendingEditorial)return;
+ const {type,ids,operation}=pendingEditorial;
+ if(button)button.disabled=true;
+ let url,body;
+ if(type==='schedule'){
+  if(operation==='reschedule'){
+   url='/api/v1/studio/calendar/reschedule';
+   body={ids,...dateInfo};
+  }else{
+   url='/api/v1/studio/bulk';
+   body={resource:'episodes',ids,action:operation==='delete'?'delete':'set_status'};
+   if(operation.startsWith('status:'))body.status=operation.slice(7);
+  }
+ }else{
+  url='/api/v1/studio/editorial/bulk';
+  body={resource:type,ids,action:operation==='delete'?'delete':'set_active'};
+  if(operation.startsWith('active:'))body.active=operation==='active:true';
+ }
+ try{
+  const result=await apiRequest(url,{method:'POST',body:JSON.stringify(body)});
+  editorialSelection[type].clear();pendingEditorial=null;
+  await fetchStudioData();await refreshPublicCatalog();
+  document.getElementById('modal-root').innerHTML='';
+  render();toast(result.count+' '+(result.count===1?'item atualizado.':'itens atualizados.'));
+ }catch(error){toast(editorialErrorMessage(error));if(button)button.disabled=false}
+}
+
 function teamsAdmin(){return pageHead('Equipes e permissões','Colaboradores, papéis e responsabilidade pelas produções.',`<button class="btn" data-action="create-team">+ Equipe</button><button class="btn primary" data-action="create-member">+ Integrante</button>`)+`<div class="two-column"><div class="panel"><h2>Equipes</h2><div class="stack">${db.teams.map(t=>`<div class="item-card"><div class="item-info"><h3>${esc(t.name)}</h3><p>${db.members.filter(m=>m.teamId===t.id).length} integrante(s) · ${db.series.filter(s=>s.teamIds.includes(t.id)).length} produção(ões)</p></div><button class="btn small" data-action="edit-team" data-id="${t.id}">Editar</button></div>`).join('')}</div></div><div class="panel"><h2>Integrantes</h2><table class="data-table"><thead><tr><th>Nome</th><th>Equipe</th><th>Papel</th><th></th></tr></thead><tbody>${db.members.map(m=>`<tr><td>${esc(m.name)}<div class="tiny muted">${esc(m.email)}</div></td><td>${esc(by('teams',m.teamId)?.name)}</td><td><span class="badge">${esc(m.role)}</span></td><td><button class="btn small" data-action="edit-member" data-id="${m.id}">Editar</button></td></tr>`).join('')}</tbody></table></div></div><div class="notice">Gerencie integrantes e seus papéis na equipe.</div>`}
 function settingsAdmin(){return pageHead('Configurações','')+`<nav class="settings-nav" aria-label="Categorias das configurações"><button class="btn small" data-action="settings-jump" data-target="settings-identidade" type="button">Identidade</button><button class="btn small" data-action="settings-jump" data-target="settings-marca" type="button">Marca</button><button class="btn small" data-action="settings-jump" data-target="settings-reproducao" type="button">Reprodução</button><button class="btn small" data-action="settings-jump" data-target="settings-uploads" type="button">Uploads</button><button class="btn small" data-action="settings-jump" data-target="settings-seguranca" type="button">Segurança</button></nav><section class="panel form-surface-light settings-panel" id="settings-identidade"><div class="settings-section-head"><div><h2>Identidade e portal</h2><p>Dados públicos, imagens da marca e comportamento da reprodução.</p></div></div><form id="settings-form" class="stack"><fieldset class="settings-category"><legend>Identidade da plataforma</legend><div class="field"><label>Nome da plataforma</label><input class="input" name="siteName" value="${esc(db.preferences.siteName)}" required></div><div class="field"><label>Descrição pública</label><textarea class="textarea" name="siteDescription">${esc(db.preferences.siteDescription)}</textarea></div><div class="field"><label>E-mail de contato institucional</label><input class="input" name="contactEmail" type="email" value="${esc(db.preferences.contactEmail||'')}" placeholder="contato@exemplo.com"></div></fieldset><fieldset class="settings-category" id="settings-marca"><legend>Marca · logotipo e ícone</legend>${mediaField('Logotipo','logoUrl',db.preferences.logoUrl||'','logo')}${mediaField('Ícone / favicon','iconUrl',db.preferences.iconUrl||'','icon')}</fieldset><fieldset class="settings-category" id="settings-reproducao"><legend>Reprodução</legend><label class="row tiny"><input type="checkbox" name="autoplay" ${db.preferences.autoplay?'checked':''}> Sugerir reprodução automática do próximo episódio</label></fieldset><div><button class="btn primary" type="submit" ${hosted&&!studioUser?.isAdmin?'disabled':''}>Salvar configurações</button></div></form></section><section class="panel form-surface-light settings-panel" id="settings-uploads"><div class="settings-section-head"><div><h2>Biblioteca de Mídia e uploads</h2><p>Defina os formatos e limites dos arquivos enviados.</p></div></div><form id="upload-settings-form" class="stack"><div class="form-grid"><div class="field"><label>Tamanho máximo por arquivo (1 a 20 MB)</label><input class="input" type="number" name="maxFileMb" min="1" max="20" value="${mediaData.settings.maxFileMb}" required></div><div class="field"><label>Quantidade máxima de imagens (1 a 2000)</label><input class="input" type="number" name="maxFiles" min="1" max="2000" value="${mediaData.settings.maxFiles}" required></div></div><div class="field"><label>Formatos permitidos</label><div class="pillset">${['png','jpeg','webp','gif'].map(t=>`<label class="pill"><input type="checkbox" name="allowedTypes" value="${t}" ${mediaData.settings.allowedTypes.includes(t)?'checked':''}> ${t.toUpperCase()}</label>`).join('')}</div></div><p class="muted tiny">Escolha os formatos e limites permitidos para novos envios. Os arquivos existentes serão mantidos.</p><div><button class="btn primary" type="submit" ${!studioUser?.isAdmin?'disabled':''}>Salvar limites de upload</button></div></form></section><section class="panel settings-panel" id="settings-seguranca"><h2>Ambiente e segurança</h2><p class="muted">O acesso às funções administrativas segue as permissões de cada usuário.</p></section>`}
 function studioPage(){const page=route.parts[1]||'dashboard';return studioFrame(({dashboard,series:seriesAdmin,seasons:seasonsAdmin,episodes:episodesAdmin,media:mediaAdmin,schedule:scheduleAdmin,homepage:homepageAdmin,teams:teamsAdmin,settings:settingsAdmin}[page]||dashboard)())}
@@ -895,6 +1009,8 @@ if(route.studio){
   if(hosted&&!studioData){root.innerHTML=publicNav()+'<main class="container"><p>Carregando Studio...</p></main>';return}
   root.innerHTML=studioPage();
   if(['series','seasons','episodes'].includes(route.parts[1]))syncCatalogSelection(route.parts[1]);
+  if(route.parts[1]==='schedule')syncEditorialSelection('schedule');
+  if(route.parts[1]==='homepage'){syncEditorialSelection('banners');syncEditorialSelection('sections');}
   return
 }let content=route.path==='/'?home():route.parts[0]==='explorar'?explore():route.parts[0]==='serie'?seriesPage(route.parts[1]):route.parts[0]==='assistir'?watchPage(route.parts[1]):route.parts[0]==='entrar'?'<main class="container"><button class="btn primary" data-action="go-studio">Entrar no Studio</button></main>':missing();root.innerHTML=publicNav()+content+`<footer class="footer">CenaLivre · Séries independentes</footer>`;
 if(route.parts[0]==='assistir'&&activeVideo===route.parts[1]){
@@ -1042,6 +1158,27 @@ function formSubmit(form){const type=form.dataset.form;if(!type)return;
 if(hosted){if(['series','seasons','episodes','teams','members','banners'].includes(type)){void saveRemoteEntity(form);}else toast('Esta operação ainda não está habilitada.');return;}
 const f=new FormData(form),v=Object.fromEntries(f.entries());if(type==='episodes'&&v.endAt&&v.releaseAt&&new Date(v.endAt)<=new Date(v.releaseAt)){toast('O término precisa ser posterior à estreia.');return}if(type==='banners'&&v.endAt&&v.startAt&&new Date(v.endAt)<=new Date(v.startAt)){toast('O fim da campanha precisa ser posterior ao início.');return}if(type==='series'){v.slug=slug(v.title);v.teamIds=f.getAll('teamIds');v.featured=f.has('featured')}if(type==='banners'){v.active=f.has('active');v.order=Number(v.order)||1}if(type==='episodes'){v.number=Number(v.number);v.duration=Number(v.duration);v.status=v.status||'scheduled'}if(type==='seasons')v.number=Number(v.number);if(type==='series'&&!v.teamIds.length){toast('Selecione uma equipe responsável.');return}const old=form.dataset.id&&by(type,form.dataset.id);if(old)Object.assign(old,v);else db[type].push({id:id(type[0]),...v});save();document.getElementById('modal-root').innerHTML='';render();toast('Alterações salvas.')}
 function handle(action,el){const eid=el.dataset.id;
+if(action==='editorial-reset'){
+ const type=el.dataset.type,filters=editorialFilter[type];
+ if(filters){for(const name of Object.keys(filters))filters[name]=name==='query'?'':'all';render()}
+ return;
+}
+if(action==='editorial-clear'){
+ const type=el.dataset.type;
+ if(editorialSelection[type]){editorialSelection[type].clear();refreshEditorialPanel(type)}
+ return;
+}
+if(action==='editorial-section-create'){openSectionEditor();return}
+if(action==='editorial-section-edit'){openSectionEditor(eid);return}
+if(action==='editorial-move'){void moveEditorialSection(eid,Number(el.dataset.direction));return}
+if(action==='editorial-delete'){prepareEditorialOperation(el.dataset.type,[eid],'delete');return}
+if(action==='editorial-apply'){
+ const type=el.dataset.type,operation=document.querySelector('[data-editorial-operation="'+type+'"]')?.value;
+ if(operation)prepareEditorialOperation(type,[...editorialSelection[type]],operation);
+ return;
+}
+if(action==='editorial-confirm'){void runEditorialOperation(el);return}
+
 if(action==='bulk-clear'){
  const type=el.dataset.type;if(catalogSelection[type]){catalogSelection[type].clear();refreshCatalogTable(type);}
  return;
@@ -1126,7 +1263,7 @@ if(action==='media-download'){
 }
 if(action==='media-delete'){void deleteMedia(eid);return}
 if(action==='logout'){void logoutStudio();return}
-if(hosted&&route.studio&&(/^(reset|move-section|toggle-section)$/.test(action))){
+if(hosted&&route.studio&&(/^(reset)$/.test(action))){
   toast('Funcionalidade administrativa em migração. Nenhum dado foi alterado.');return;
 }
 switch(action){case'route':nav(el.dataset.path);break;case'go-studio':nav('/studio/dashboard');break;case'go-series':nav('/serie/'+eid);break;case'watch':if(eid)nav('/assistir/'+eid);break;case'play-video':{const e=by('episodes',eid);if(!e||!playable(e))break;if(ytId(e.youtube)){activeVideo=eid;render()}else toast('Vídeo indisponível. Verifique o link do episódio.');break}case'home-view':homeView=el.dataset.view==='list'?'list':'grid';render();break;case'catalog-view':catalogView=el.dataset.view==='list'?'list':'grid';localStorage.setItem('cenalivre-catalog-view',catalogView);render();break;case'filter-cat':filterCategory=el.dataset.cat;history.replaceState(null,'','#/explorar');render();break;case'fav':{const i=db.saved.indexOf(eid);if(i>=0)db.saved.splice(i,1);else db.saved.push(eid);save();render();toast(i>=0?'Removido da lista.':'Adicionado à lista deste navegador.');break}case'toggle-side':document.getElementById('sidebar')?.classList.toggle('open');break;case'close-modal':document.getElementById('modal-root').innerHTML='';break;case'create-series':openEditor('series');break;case'edit-series':openEditor('series',eid);break;case'create-season':openEditor('seasons');break;case'edit-season':openEditor('seasons',eid);break;case'create-episode':openEditor('episodes');break;case'edit-episode':openEditor('episodes',eid);break;case'create-banner':openEditor('banners');break;case'edit-banner':openEditor('banners',eid);break;case'create-team':openEditor('teams');break;case'edit-team':openEditor('teams',eid);break;case'create-member':openEditor('members');break;case'edit-member':openEditor('members',eid);break;case'add-media':openEditor('media');break;case'toggle-section':{let x=by('homeSections',eid);if(x)x.active=el.checked;save();render();break}case'move-section':{const i=db.homeSections.findIndex(x=>x.id===eid),j=i+Number(el.dataset.dir);if(j>=0&&j<db.homeSections.length)[db.homeSections[i],db.homeSections[j]]=[db.homeSections[j],db.homeSections[i]];save();render();break}case'copy-url':navigator.clipboard?.writeText(el.dataset.url).then(()=>toast('URL copiada.'),()=>toast('Não foi possível copiar automaticamente.'));break;case'reset':if(confirm('Restaurar todos os dados fictícios? Suas alterações locais serão perdidas.')){db=initial();save();nav('/studio/dashboard');render();toast('Dados restaurados.')}break;}}
@@ -1137,6 +1274,16 @@ document.addEventListener('click',e=>{
  if(el.tagName==='BUTTON')e.preventDefault();
  handle(el.dataset.action,el);
 });document.addEventListener('submit',e=>{e.preventDefault();
+if(e.target.id==='editorial-section-form'){void persistSection(e.target);return;}
+if(e.target.id==='editorial-reschedule-form'){
+ const form=e.target;
+ const fd=new FormData(form),release=String(fd.get('releaseAt')||''),end=String(fd.get('endAt')||'');
+ if(!release||(end&&new Date(end)<=new Date(release))){toast('Confira as datas de estreia e término.');return;}
+ void runEditorialOperation(form.querySelector('[type="submit"]'),
+  {releaseAt:isoFromInput(release),endAt:isoFromInput(end)});
+ return;
+}
+
 if(e.target.querySelector('.media-field.uploading')){toast('Aguarde o upload da imagem terminar antes de salvar.');return;}
 
 if(e.target.id==='media-upload-form'){void submitMediaUpload(e.target);return}
@@ -1156,6 +1303,34 @@ if(e.target.id==='upload-settings-form'){
 if(e.target.id==='studio-login'){void loginStudio(e.target);return;}
 if(hosted&&e.target.id==='settings-form'){void saveRemoteSettings(e.target);return;}
 if(e.target.id==='settings-form'){const f=new FormData(e.target);db.preferences={siteName:f.get('siteName'),siteDescription:f.get('siteDescription'),autoplay:f.has('autoplay')};save();toast('Preferências salvas.')}else formSubmit(e.target)});document.addEventListener('change',e=>{
+if(e.target.matches('[data-editorial-row]')){
+ const type=e.target.dataset.editorialRow;
+ if(editorialSelection[type]){
+  if(e.target.checked)editorialSelection[type].add(e.target.value);
+  else editorialSelection[type].delete(e.target.value);
+  syncEditorialSelection(type);
+ }return;
+}
+if(e.target.matches('[data-editorial-select-all]')){
+ const type=e.target.dataset.editorialSelectAll;
+ if(editorialSelection[type]){
+  for(const item of editorialItems(type)){
+   if(e.target.checked)editorialSelection[type].add(item.id);
+   else editorialSelection[type].delete(item.id);
+  }
+  refreshEditorialPanel(type);
+ }return;
+}
+if(e.target.matches('[data-editorial-operation]')){
+ syncEditorialSelection(e.target.dataset.editorialOperation);return;
+}
+if(e.target.matches('[data-editorial-filter]')){
+ const type=e.target.closest('[data-editorial-type]')?.dataset.editorialType;
+ if(type&&editorialFilter[type]){
+  editorialFilter[type][e.target.dataset.editorialFilter]=e.target.value;
+  refreshEditorialPanel(type);
+ }return;
+}
 if(e.target.matches('[data-bulk-row]')){
  const type=e.target.dataset.bulkRow;
  if(catalogSelection[type]){
@@ -1217,6 +1392,11 @@ document.addEventListener('drop',e=>{
   }
 });
 document.addEventListener('input',e=>{
+if(e.target.matches('[data-editorial-search]')){
+ const type=e.target.dataset.editorialSearch;
+ if(editorialFilter[type]){editorialFilter[type].query=e.target.value;refreshEditorialPanel(type);}
+ return;
+}
 if(e.target.matches('[data-catalog-search]')){
  const type=e.target.dataset.catalogSearch;
  if(catalogFilters[type]){catalogFilters[type].query=e.target.value;refreshCatalogTable(type);}
