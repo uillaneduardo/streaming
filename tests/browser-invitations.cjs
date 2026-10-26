@@ -56,7 +56,7 @@ async function run(){
   await visitor.locator('#invite-accept-form [type="submit"]').click();
   await visitor.getByText('Convite aceito.',{exact:false}).first().waitFor({timeout:15000});
   await visitor.screenshot({path:path.join(dir,'m1-invitation-accepted-mobile.png'),fullPage:true});
-  await visitor.locator('[data-action="go-studio"]').click();
+  await visitor.locator('.auth-panel [data-action="go-studio"]').click();
   await visitor.locator('#studio-login').waitFor();
   await visitor.locator('#studio-login [name="email"]').fill(inviteEmail);
   await visitor.locator('#studio-login [name="password"]').fill(secretPass);
