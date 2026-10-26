@@ -225,7 +225,7 @@ async function call(path,method='GET',body){
   assert.equal((await call('/api/v1/studio/series/s1','PUT',form)).code,403);
   csrf=editorCsrf;
   assert.equal((await call('/api/v1/studio/series/s3','PUT',form)).code,403);
-  assert.equal((await call('/api/v1/studio/series/s3','DELETE')).code,403,'Cannot delete another team's series');
+  assert.equal((await call('/api/v1/studio/series/s3','DELETE')).code,403,"Cannot delete another team's series");
   assert.equal((await call('/api/v1/studio/episodes/e1','DELETE')).code,403,'Editor cannot delete published episode without publisher permission');
 
   assert.equal((await call('/api/v1/studio/series/s1','PUT',{...form,featured:true})).code,403);
