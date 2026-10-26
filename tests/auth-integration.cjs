@@ -23,6 +23,7 @@ async function call(path,method='GET',body){
   assert.equal(user.code,201);
   assert.equal((await call('/api/v1/studio/teams/t1/members','PUT',{email:'integration-editor@example.test',role:'editor'})).code,200);
   assert.equal((await call('/api/v1/studio/series/s1/grants','PUT',{teamId:'t1',userId:user.data.id,permission:'edit'})).code,200);
+  const ownerCookie=cookie,ownerCsrf=csrf;
   const editorLogin=await call('/api/v1/auth/login','POST',{email:'integration-editor@example.test',password:editorPassword});
   assert.equal(editorLogin.code,200);
   cookie=editorLogin.setCookie.split(';')[0];csrf=editorLogin.data.csrfToken;
@@ -30,9 +31,18 @@ async function call(path,method='GET',body){
   assert.equal(scoped.code,200);assert.deepEqual(scoped.data.series.map(s=>s.id),['s1']);
   const form={title:'Além da Órbita',category:'Ficção científica',summary:'Texto atualizado na integração',poster:'assets/orbital-poster.svg',banner:'assets/orbital-banner.svg'};
   assert.equal((await call('/api/v1/studio/series/s1','PUT',form)).code,200);
+  const editorCsrf=csrf;csrf='';
+  assert.equal((await call('/api/v1/studio/series/s1','PUT',form)).code,403);
+  csrf=editorCsrf;
   assert.equal((await call('/api/v1/studio/series/s3','PUT',form)).code,403);
   assert.equal((await call('/api/v1/studio/series/s1','PUT',{...form,featured:true})).code,403);
   assert.equal((await call('/api/v1/auth/logout','POST')).code,200);
   assert.equal((await call('/api/v1/studio/bootstrap')).code,401);
+  cookie=ownerCookie;csrf=ownerCsrf;
+  assert.equal((await call('/api/v1/studio/teams/t1/members','PUT',{email:'integration-editor@example.test',role:'viewer'})).code,200);
+  const again=await call('/api/v1/auth/login','POST',{email:'integration-editor@example.test',password:editorPassword});
+  assert.equal(again.code,200);cookie=again.setCookie.split(';')[0];csrf=again.data.csrfToken;
+  assert.deepEqual((await call('/api/v1/studio/bootstrap')).data.series,[]);
+  assert.equal((await call('/api/v1/studio/series/s1','PUT',form)).code,403);
   console.log('Authentication, role isolation, grants and revocation: OK');
 })().catch(e=>{console.error(e);process.exitCode=1});
