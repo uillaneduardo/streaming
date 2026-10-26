@@ -1219,7 +1219,7 @@ function categorySettingsPanel(){const cats=categoriesList();return '<section cl
 async function categoryOperation(action,id){
  if(hosted&&!studioUser?.isAdmin){toast('Somente administradores podem gerenciar categorias.');return;}
  const current=categoriesList().find(c=>c.id===id);
- if(action==='delete'&&(!current||!confirm('Excluir a categoria "'+current.name+'"?'))return;
+ if(action==='delete'&&(!current||!confirm('Excluir a categoria "'+current.name+'"?')))return;
  let name='';
  if(action!=='delete'){
   const value=prompt(action==='create'?'Nome da nova categoria':'Novo nome da categoria',current?.name||'');
