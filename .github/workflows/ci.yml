@@ -101,9 +101,9 @@ jobs:
           # Repeated deploy must also be a no-op.
           docker compose run --rm migrate
           node -e "fetch('http://localhost:8088/api/v1/public/bootstrap',{cache:'no-store'}).then(r=>r.json()).then(d=>{for(const id of ['s3','s5'])if(d.series.some(s=>s.id===id))throw Error('deleted series reappeared: '+id);if(d.series.find(s=>s.id==='s1')?.title!=='Título editado preservado')throw Error('edited content changed');if(d.homeSections.some(s=>s.id==='hs4'))throw Error('deleted home section reappeared');console.log('Deleted and edited content preserved across legacy upgrade and repeated migration')}).catch(e=>{console.error(e);process.exit(1)})"
-          result="$(docker compose exec -T db sh -c 'MYSQL_PWD="$MARIADB_PASSWORD" mariadb -N -u "$MARIADB_USER" "$MARIADB_DATABASE" -e "SELECT COUNT(*) FROM teams WHERE id=\x27t3\x27"' | tr -d '\r')"
+          result="$(docker compose exec -T db sh -c 'MYSQL_PWD="$MARIADB_PASSWORD" mariadb -N -u "$MARIADB_USER" "$MARIADB_DATABASE" -e "SELECT COUNT(*) FROM teams WHERE id=0x7433"' | tr -d '\r')"
           test "$result" = "0"
-          baseline="$(docker compose exec -T db sh -c 'MYSQL_PWD="$MARIADB_PASSWORD" mariadb -N -u "$MARIADB_USER" "$MARIADB_DATABASE" -e "SELECT legacy_baseline FROM schema_migrations WHERE name=\x27001_initial.sql\x27"' | tr -d '\r')"
+          baseline="$(docker compose exec -T db sh -c 'MYSQL_PWD="$MARIADB_PASSWORD" mariadb -N -u "$MARIADB_USER" "$MARIADB_DATABASE" -e "SELECT legacy_baseline FROM schema_migrations WHERE name=0x3030315f696e697469616c2e73716c"' | tr -d '\r')"
           test "$baseline" = "1"
           echo "Legacy migration baseline verified; deleted team did not return."
       - name: Container logs on failure
