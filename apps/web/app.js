@@ -703,8 +703,172 @@ function mediaAdmin(){
  '. Tamanho máximo: '+mediaData.settings.maxFileMb+' MB por arquivo. Até '+mediaData.settings.maxFiles+
  ' imagens. Ajuste os limites em Configurações → Uploads.</div>';
 }
-function scheduleAdmin(){const es=[...db.episodes].filter(e=>e.releaseAt).sort((a,b)=>new Date(a.releaseAt)-new Date(b.releaseAt));return pageHead('Calendário editorial','Controle as janelas de publicação de cada episódio.')+`<div class="panel"><h2>Linha do tempo de lançamentos</h2>${es.map(e=>`<div class="schedule-line"><div class="smallcaps">${dt(e.releaseAt)}</div><div class="row between"><div><strong>${esc(seriesForEpisode(e)?.title)} — ${esc(e.title)}</strong><div class="tiny muted">${state(e)}${e.endAt?' · expira '+dt(e.endAt):' · sem expiração'}</div></div><button class="btn small" data-action="edit-episode" data-id="${e.id}">Editar datas</button></div></div>`).join('')}</div>`}
-function homepageAdmin(){return pageHead('CMS da página inicial','Gerencie a vitrine, campanhas e ordem das seções.',`<button class="btn primary" data-action="create-banner">+ Novo banner</button>`)+`<div class="panel"><h2>Banners e campanhas</h2><div class="stack">${db.banners.map(b=>`<div class="item-card"><img class="banner-thumb" src="${esc(b.image)}" alt=""><div class="item-info"><h3>${esc(b.title)}</h3><p>${bannerActive(b)?'No ar':b.active?'Programado ou encerrado':'Inativo'} · ${b.startAt?dt(b.startAt):'Início imediato'} · ${b.endAt?dt(b.endAt):'Sem término'}</p></div><button class="btn small" data-action="edit-banner" data-id="${b.id}">Editar</button></div>`).join('')}</div></div><div class="panel"><h2>Seções do portal</h2><p class="muted tiny">Altere a ordem e visibilidade dos blocos da página inicial.</p><div class="stack">${db.homeSections.map((s,i)=>`<div class="item-card"><div class="item-info"><h3>${esc(s.title)}</h3><p>${esc(s.kind)}</p></div><label class="tiny"><input type="checkbox" data-action="toggle-section" data-id="${s.id}" ${s.active?'checked':''}> Visível</label><button class="btn small" data-action="move-section" data-id="${s.id}" data-dir="-1" ${i===0?'disabled':''}>↑</button><button class="btn small" data-action="move-section" data-id="${s.id}" data-dir="1" ${i===db.homeSections.length-1?'disabled':''}>↓</button></div>`).join('')}</div></div>`}
+
+const editorialFilter={
+ banners:{query:'',state:'all',seriesId:'all'},
+ sections:{query:'',state:'all',kind:'all'},
+ schedule:{query:'',state:'all',seriesId:'all',period:'all'}
+};
+const editorialSelection={banners:new Set(),sections:new Set(),schedule:new Set()};
+const editorialKindLabels={featured:'Em destaque',latest:'Últimos lançamentos',upcoming:'Próximas estreias',all:'Todas as séries'};
+function editorialItems(type){
+ const f=editorialFilter[type];
+ if(type==='banners'){
+  return [...db.banners].filter(b=>{
+   const state=bannerState(b);
+   return (f.state==='all'||f.state===state)&&
+    (f.seriesId==='all'||b.target===f.seriesId)&&
+    catalogMatches([b.title,b.subtitle,by('series',b.target)?.title].join(' '),f.query);
+  }).sort((a,b)=>(a.order||0)-(b.order||0));
+ }
+ if(type==='sections'){
+  return [...db.homeSections].filter(x=>(f.state==='all'||(x.active?'active':'inactive')===f.state)&&
+   (f.kind==='all'||x.kind===f.kind)&&catalogMatches([x.title,editorialKindLabels[x.kind]||x.kind].join(' '),f.query));
+ }
+ const today=Date.now();
+ return [...db.episodes].filter(e=>{
+  const se=by('seasons',e.seasonId),series=by('series',se?.seriesId);
+  const stamp=e.releaseAt?new Date(e.releaseAt).getTime():null;
+  const period=stamp===null?'undated':stamp>today?'future':'past';
+  return (f.seriesId==='all'||se?.seriesId===f.seriesId)&&
+   (f.state==='all'||e.status===f.state)&&
+   (f.period==='all'||f.period===period)&&
+   catalogMatches([e.title,series?.title,se?.title].join(' '),f.query);
+ }).sort((a,b)=>new Date(a.releaseAt||'9999-01-01')-new Date(b.releaseAt||'9999-01-01'));
+}
+function bannerState(b){
+ if(!b.active)return 'inactive';
+ const stamp=Date.now(),start=b.startAt?Date.parse(b.startAt):null,end=b.endAt?Date.parse(b.endAt):null;
+ if(start&&start>stamp)return 'scheduled';
+ if(end&&end<=stamp)return 'ended';
+ return 'active';
+}
+function bannerStateLabel(b){
+ return {inactive:'Inativo',scheduled:'Programado',ended:'Encerrado',active:'No ar'}[bannerState(b)];
+}
+function editorialCheckbox(type,item){
+ return '<label class="catalog-checkbox"><input type="checkbox" data-editorial-row="'+type+'" value="'+esc(item.id)+'" '+
+  (editorialSelection[type].has(item.id)?'checked':'')+' aria-label="Selecionar '+esc(item.title)+'"></label>';
+}
+function editorialSelect(key,options,value){
+ return '<label class="catalog-filter"><span>'+key.label+'</span><select class="select" data-editorial-filter="'+key.key+'">'+
+  options.map(o=>'<option value="'+esc(o.id)+'" '+(value===o.id?'selected':'')+'>'+esc(o.name)+'</option>').join('')+
+ '</select></label>';
+}
+function editorialToolbar(type){
+ const f=editorialFilter[type],series=[{id:'all',name:'Todas as séries'},...db.series.map(s=>({id:s.id,name:s.title}))];
+ const bannerStates=[{id:'all',name:'Todos os estados'},...[
+  ['active','No ar'],['scheduled','Programados'],['inactive','Inativos'],['ended','Encerrados']
+ ].map(([id,name])=>({id,name}))];
+ const onOff=[{id:'all',name:'Todas as visibilidades'},{id:'active',name:'Visíveis'},{id:'inactive',name:'Ocultas'}];
+ const status=[{id:'all',name:'Todos os estados'},...catalogStatuses.episodes];
+ const periods=[{id:'all',name:'Todas as datas'},{id:'past',name:'Até hoje'},
+  {id:'future',name:'Futuras'},{id:'undated',name:'Sem data'}];
+ const kinds=[{id:'all',name:'Todos os tipos'},...Object.entries(editorialKindLabels).map(([id,name])=>({id,name}))];
+ return '<div class="catalog-toolbar" data-editorial-type="'+type+'">'+
+ '<label class="catalog-search"><span>Pesquisar</span><input class="input" type="search" data-editorial-search="'+type+
+ '" value="'+esc(f.query)+'" placeholder="Buscar por título ou série"></label>'+
+ (type==='banners'?
+  editorialSelect({label:'Estado',key:'state'},bannerStates,f.state)+
+  editorialSelect({label:'Série',key:'seriesId'},series,f.seriesId):
+  type==='sections'?
+   editorialSelect({label:'Visibilidade',key:'state'},onOff,f.state)+
+   editorialSelect({label:'Tipo',key:'kind'},kinds,f.kind):
+   editorialSelect({label:'Série',key:'seriesId'},series,f.seriesId)+
+   editorialSelect({label:'Estado',key:'state'},status,f.state)+
+   editorialSelect({label:'Estreia',key:'period'},periods,f.period)
+ )+'<button type="button" class="btn small" data-action="editorial-reset" data-type="'+type+'">Limpar filtros</button></div>';
+}
+function editorialActions(type){
+ const statusOptions=type==='schedule'?
+ catalogStatuses.episodes.map(x=>'<option value="status:'+x.id+'">Marcar como '+esc(x.name.toLowerCase())+'</option>').join(''):
+ '<option value="active:true">Ativar selecionados</option><option value="active:false">Desativar selecionados</option>';
+ return '<div class="catalog-bulk-bar" data-editorial-bulk="'+type+'">'+
+ '<strong class="catalog-bulk-count" data-editorial-count="'+type+'">0 selecionados</strong>'+
+ '<select class="select" data-editorial-operation="'+type+'" disabled aria-label="Ação em lote">'+
+ '<option value="">Selecione uma ação</option>'+statusOptions+
+ (type==='schedule'?'<option value="reschedule">Alterar datas</option>':'')+
+ '<option value="delete">Excluir selecionados</option></select>'+
+ '<button type="button" class="btn small primary" data-action="editorial-apply" data-type="'+type+'" disabled>Aplicar</button>'+
+ '<button type="button" class="btn small" data-action="editorial-clear" data-type="'+type+'" disabled>Limpar seleção</button></div>';
+}
+function syncEditorialSelection(type){
+ const selection=editorialSelection[type];if(!selection)return;
+ const list=editorialItems(type);
+ const head=document.querySelector('[data-editorial-select-all="'+type+'"]');
+ const checked=list.filter(x=>selection.has(x.id)).length;
+ if(head){head.disabled=!list.length;head.checked=!!list.length&&checked===list.length;head.indeterminate=checked>0&&checked<list.length}
+ const counter=document.querySelector('[data-editorial-count="'+type+'"]');
+ if(counter)counter.textContent=selection.size+' selecionado'+(selection.size===1?'':'s');
+ const menu=document.querySelector('[data-editorial-operation="'+type+'"]');
+ if(menu)menu.disabled=!selection.size;
+ const apply=document.querySelector('[data-action="editorial-apply"][data-type="'+type+'"]');
+ if(apply)apply.disabled=!selection.size||!menu?.value;
+ const clear=document.querySelector('[data-action="editorial-clear"][data-type="'+type+'"]');
+ if(clear)clear.disabled=!selection.size;
+ document.querySelector('[data-editorial-bulk="'+type+'"]')?.classList.toggle('has-selection',selection.size>0);
+}
+function editorialRows(type){
+ const items=editorialItems(type);
+ if(!items.length)return '<tr><td colspan="6"><div class="catalog-empty"><strong>Nenhum resultado encontrado</strong>'+
+ '<p>Altere os filtros ou crie um novo item.</p></div></td></tr>';
+ if(type==='banners')return items.map(b=>
+ '<tr><td>'+editorialCheckbox(type,b)+'</td><td><div class="catalog-title"><img class="cms-banner-image" src="'+esc(b.image)+'" alt="">'+
+ '<div><strong>'+esc(b.title)+'</strong><div class="muted tiny">'+esc(by('series',b.target)?.title||'Sem destino')+'</div></div></div></td>'+
+ '<td><span class="badge '+(bannerState(b)==='active'?'green':bannerState(b)==='inactive'?'blue':'orange')+'">'+bannerStateLabel(b)+'</span></td>'+
+ '<td>'+esc(b.startAt?dt(b.startAt):'Imediato')+'</td><td>'+esc(b.endAt?dt(b.endAt):'Sem término')+'</td>'+
+ '<td class="catalog-row-actions"><button class="btn small" data-action="edit-banner" data-id="'+esc(b.id)+'">Editar</button>'+
+ '<button class="btn small catalog-delete" data-action="editorial-delete" data-type="banners" data-id="'+esc(b.id)+'">Excluir</button></td></tr>').join('');
+ if(type==='sections')return items.map((x)=>{
+  const index=db.homeSections.findIndex(s=>s.id===x.id);
+  return '<tr><td>'+editorialCheckbox(type,x)+'</td><td><strong>'+esc(x.title)+'</strong></td>'+
+  '<td>'+esc(editorialKindLabels[x.kind]||x.kind)+'</td>'+
+  '<td><span class="badge '+(x.active?'green':'blue')+'">'+(x.active?'Visível':'Oculta')+'</span></td>'+
+  '<td class="cms-order-buttons"><button class="btn small" type="button" data-action="editorial-move" data-id="'+esc(x.id)+
+  '" data-direction="-1" '+(index===0?'disabled':'')+' aria-label="Mover seção para cima">↑</button>'+
+  '<button class="btn small" type="button" data-action="editorial-move" data-id="'+esc(x.id)+
+  '" data-direction="1" '+(index===db.homeSections.length-1?'disabled':'')+' aria-label="Mover seção para baixo">↓</button></td>'+
+  '<td class="catalog-row-actions"><button class="btn small" data-action="editorial-section-edit" data-id="'+esc(x.id)+'">Editar</button>'+
+  '<button class="btn small catalog-delete" data-action="editorial-delete" data-type="sections" data-id="'+esc(x.id)+'">Excluir</button></td></tr>';
+ }).join('');
+ return items.map(e=>{
+  const season=by('seasons',e.seasonId),series=by('series',season?.seriesId);
+  const status=catalogStatuses.episodes.find(x=>x.id===e.status)?.name||'Rascunho';
+  return '<tr><td>'+editorialCheckbox(type,e)+'</td><td><strong>'+esc(e.title)+'</strong>'+
+  '<div class="muted tiny">'+esc(series?.title||'Série indisponível')+' · T'+(season?.number||'?')+':E'+e.number+'</div></td>'+
+  '<td><span class="badge '+(e.status==='published'?'green':e.status==='scheduled'?'orange':'blue')+'">'+esc(status)+'</span></td>'+
+  '<td>'+esc(e.releaseAt?dt(e.releaseAt):'Sem data')+'</td><td>'+esc(e.endAt?dt(e.endAt):'Sem término')+'</td>'+
+  '<td class="catalog-row-actions"><button class="btn small" data-action="edit-episode" data-id="'+esc(e.id)+'">Editar</button>'+
+  '<button class="btn small catalog-delete" data-action="editorial-delete" data-type="schedule" data-id="'+esc(e.id)+'">Excluir</button></td></tr>';
+ }).join('');
+}
+function editorialPanel(type){
+ const titles={banners:'Banners e campanhas',sections:'Seções do portal',schedule:'Publicações agendadas'};
+ const heads={banners:['Campanha','Estado','Início','Término','Ações'],
+  sections:['Seção','Tipo','Visibilidade','Ordem','Ações'],
+  schedule:['Episódio','Estado','Estreia','Término','Ações']};
+ const buttons=type==='banners'?'<button type="button" class="btn primary" data-action="create-banner">+ Novo banner</button>':
+  type==='sections'?'<button type="button" class="btn primary" data-action="editorial-section-create">+ Nova seção</button>':
+   '<button type="button" class="btn primary" data-action="create-episode">+ Novo episódio</button>';
+ return '<section class="panel catalog-manager" data-editorial-panel="'+type+'"><div class="row between cms-panel-head">'+
+ '<h2>'+titles[type]+'</h2>'+buttons+'</div>'+editorialToolbar(type)+editorialActions(type)+
+ '<p class="catalog-results" data-editorial-result-count="'+type+'">'+editorialItems(type).length+' itens</p>'+
+ '<div class="catalog-table-scroll"><table class="data-table catalog-table cms-table"><thead><tr>'+
+ '<th class="catalog-checkbox-column"><label class="catalog-checkbox"><input type="checkbox" data-editorial-select-all="'+type+
+ '" aria-label="Selecionar todos os itens filtrados"></label></th>'+
+ heads[type].map(h=>'<th>'+h+'</th>').join('')+'</tr></thead><tbody>'+editorialRows(type)+
+ '</tbody></table></div></section>';
+}
+function refreshEditorialPanel(type){
+ const panel=document.querySelector('[data-editorial-panel="'+type+'"]');
+ if(!panel)return;
+ const tbody=panel.querySelector('tbody');if(tbody)tbody.innerHTML=editorialRows(type);
+ const count=panel.querySelector('[data-editorial-result-count]');if(count)count.textContent=editorialItems(type).length+' itens';
+ syncEditorialSelection(type);
+}
+function scheduleAdmin(){return pageHead('Calendário editorial','Gerencie datas de estreia e publicação.')+editorialPanel('schedule')}
+function homepageAdmin(){return pageHead('CMS da página inicial','Organize campanhas e seções do portal.')+
+ editorialPanel('banners')+editorialPanel('sections')}
 function teamsAdmin(){return pageHead('Equipes e permissões','Colaboradores, papéis e responsabilidade pelas produções.',`<button class="btn" data-action="create-team">+ Equipe</button><button class="btn primary" data-action="create-member">+ Integrante</button>`)+`<div class="two-column"><div class="panel"><h2>Equipes</h2><div class="stack">${db.teams.map(t=>`<div class="item-card"><div class="item-info"><h3>${esc(t.name)}</h3><p>${db.members.filter(m=>m.teamId===t.id).length} integrante(s) · ${db.series.filter(s=>s.teamIds.includes(t.id)).length} produção(ões)</p></div><button class="btn small" data-action="edit-team" data-id="${t.id}">Editar</button></div>`).join('')}</div></div><div class="panel"><h2>Integrantes</h2><table class="data-table"><thead><tr><th>Nome</th><th>Equipe</th><th>Papel</th><th></th></tr></thead><tbody>${db.members.map(m=>`<tr><td>${esc(m.name)}<div class="tiny muted">${esc(m.email)}</div></td><td>${esc(by('teams',m.teamId)?.name)}</td><td><span class="badge">${esc(m.role)}</span></td><td><button class="btn small" data-action="edit-member" data-id="${m.id}">Editar</button></td></tr>`).join('')}</tbody></table></div></div><div class="notice">Gerencie integrantes e seus papéis na equipe.</div>`}
 function settingsAdmin(){return pageHead('Configurações','')+`<nav class="settings-nav" aria-label="Categorias das configurações"><button class="btn small" data-action="settings-jump" data-target="settings-identidade" type="button">Identidade</button><button class="btn small" data-action="settings-jump" data-target="settings-marca" type="button">Marca</button><button class="btn small" data-action="settings-jump" data-target="settings-reproducao" type="button">Reprodução</button><button class="btn small" data-action="settings-jump" data-target="settings-uploads" type="button">Uploads</button><button class="btn small" data-action="settings-jump" data-target="settings-seguranca" type="button">Segurança</button></nav><section class="panel form-surface-light settings-panel" id="settings-identidade"><div class="settings-section-head"><div><h2>Identidade e portal</h2><p>Dados públicos, imagens da marca e comportamento da reprodução.</p></div></div><form id="settings-form" class="stack"><fieldset class="settings-category"><legend>Identidade da plataforma</legend><div class="field"><label>Nome da plataforma</label><input class="input" name="siteName" value="${esc(db.preferences.siteName)}" required></div><div class="field"><label>Descrição pública</label><textarea class="textarea" name="siteDescription">${esc(db.preferences.siteDescription)}</textarea></div><div class="field"><label>E-mail de contato institucional</label><input class="input" name="contactEmail" type="email" value="${esc(db.preferences.contactEmail||'')}" placeholder="contato@exemplo.com"></div></fieldset><fieldset class="settings-category" id="settings-marca"><legend>Marca · logotipo e ícone</legend>${mediaField('Logotipo','logoUrl',db.preferences.logoUrl||'','logo')}${mediaField('Ícone / favicon','iconUrl',db.preferences.iconUrl||'','icon')}</fieldset><fieldset class="settings-category" id="settings-reproducao"><legend>Reprodução</legend><label class="row tiny"><input type="checkbox" name="autoplay" ${db.preferences.autoplay?'checked':''}> Sugerir reprodução automática do próximo episódio</label></fieldset><div><button class="btn primary" type="submit" ${hosted&&!studioUser?.isAdmin?'disabled':''}>Salvar configurações</button></div></form></section><section class="panel form-surface-light settings-panel" id="settings-uploads"><div class="settings-section-head"><div><h2>Biblioteca de Mídia e uploads</h2><p>Defina os formatos e limites dos arquivos enviados.</p></div></div><form id="upload-settings-form" class="stack"><div class="form-grid"><div class="field"><label>Tamanho máximo por arquivo (1 a 20 MB)</label><input class="input" type="number" name="maxFileMb" min="1" max="20" value="${mediaData.settings.maxFileMb}" required></div><div class="field"><label>Quantidade máxima de imagens (1 a 2000)</label><input class="input" type="number" name="maxFiles" min="1" max="2000" value="${mediaData.settings.maxFiles}" required></div></div><div class="field"><label>Formatos permitidos</label><div class="pillset">${['png','jpeg','webp','gif'].map(t=>`<label class="pill"><input type="checkbox" name="allowedTypes" value="${t}" ${mediaData.settings.allowedTypes.includes(t)?'checked':''}> ${t.toUpperCase()}</label>`).join('')}</div></div><p class="muted tiny">Escolha os formatos e limites permitidos para novos envios. Os arquivos existentes serão mantidos.</p><div><button class="btn primary" type="submit" ${!studioUser?.isAdmin?'disabled':''}>Salvar limites de upload</button></div></form></section><section class="panel settings-panel" id="settings-seguranca"><h2>Ambiente e segurança</h2><p class="muted">O acesso às funções administrativas segue as permissões de cada usuário.</p></section>`}
 function studioPage(){const page=route.parts[1]||'dashboard';return studioFrame(({dashboard,series:seriesAdmin,seasons:seasonsAdmin,episodes:episodesAdmin,media:mediaAdmin,schedule:scheduleAdmin,homepage:homepageAdmin,teams:teamsAdmin,settings:settingsAdmin}[page]||dashboard)())}
