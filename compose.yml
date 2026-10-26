@@ -1,12 +1,61 @@
 services:
   web:
-    build: .
-    image: cenalivre-prototype:local
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
     ports:
-      - "${PORT:-8088}:80"
+      - "${WEB_PORT:-8088}:80"
+    depends_on:
+      api:
+        condition: service_healthy
     restart: unless-stopped
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    environment:
+      PORT: 3000
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_USER: ${DB_USER:-cenalivre}
+      DB_NAME: ${DB_NAME:-cenalivre}
+      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  migrate:
+    image: mariadb:11.4
+    environment:
+      MYSQL_PWD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
+      DB_USER: ${DB_USER:-cenalivre}
+      DB_NAME: ${DB_NAME:-cenalivre}
+    volumes:
+      - ./apps/api/sql/001_initial.sql:/migrations/001_initial.sql:ro
+    entrypoint: ["/bin/sh","-ec"]
+    command:
+      - 'mariadb -h db -u "$$DB_USER" "$$DB_NAME" < /migrations/001_initial.sql'
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  db:
+    image: mariadb:11.4
+    environment:
+      MARIADB_DATABASE: ${DB_NAME:-cenalivre}
+      MARIADB_USER: ${DB_USER:-cenalivre}
+      MARIADB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?Set DB_ROOT_PASSWORD in .env}
+    volumes:
+      - cenalivre_db:/var/lib/mysql
     healthcheck:
-      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/"]
-      interval: 30s
-      timeout: 3s
-      retries: 3
+      test: ["CMD","healthcheck.sh","--connect","--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+    restart: unless-stopped
+volumes:
+  cenalivre_db:
