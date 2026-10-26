@@ -90,3 +90,5 @@
 .media-edit-preview img{max-height:195px;max-width:100%;object-fit:contain}
 @media(max-width:850px){.media-toolbar{grid-template-columns:1fr 1fr}.media-toolbar>*:first-child{grid-column:1/-1}}
 @media(max-width:600px){.media-toolbar{grid-template-columns:1fr}.media-toolbar>*:first-child{grid-column:auto}.media-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.media-picker-panel{padding:14px}.media-field .media-input-row{flex-wrap:wrap}}
+
+.public-nav .site-logo{display:block;max-width:160px;max-height:40px;object-fit:contain}
