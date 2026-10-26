@@ -23,11 +23,13 @@ async function seriesPermission(actor:Actor,sid:string,kind:"read"|"edit"|"publi
   if(actor.isAdmin)return true;
   if((await rows(`SELECT 1 FROM series_teams st JOIN team_members m ON m.team_id=st.team_id
     WHERE st.series_id=? AND m.user_id=? AND m.role='manager' LIMIT 1`,[sid,actor.id])).length)return true;
-  const grants=await rows(`SELECT g.permission FROM series_grants g
+  const grants=await rows(`SELECT g.permission,m.role FROM series_grants g
      JOIN team_members m ON m.team_id=g.team_id AND m.user_id=g.user_id
      JOIN series_teams st ON st.series_id=g.series_id AND st.team_id=g.team_id
-     WHERE g.series_id=? AND g.user_id=?`,[sid,actor.id]);
-  return kind==="read"?grants.length>0:grants.some(g=>g.permission===kind||(kind==="edit"&&g.permission==="publish"));
+     WHERE g.series_id=? AND g.user_id=? AND m.role IN ('editor','publisher')`,[sid,actor.id]);
+  if(kind==="read")return grants.length>0;
+  if(kind==="publish")return grants.some(g=>g.permission==="publish"&&g.role==="publisher");
+  return grants.some(g=>g.permission==="edit"||g.permission==="publish");
 }
 export function registerStudio(app:FastifyInstance){
   app.get("/api/v1/studio/bootstrap",async(req,reply)=>{
@@ -92,7 +94,7 @@ export function registerStudio(app:FastifyInstance){
     const linked=await rows("SELECT 1 FROM series_teams WHERE series_id=? AND team_id=?",[sid,teamId]);
     const member=await rows("SELECT role FROM team_members WHERE user_id=? AND team_id=?",[userId,teamId]);
     if(!linked.length||!member.length)return fail(reply,404);
-    if(member[0].role==="viewer")return fail(reply);
+    if(member[0].role==="viewer"||(perm==="publish"&&member[0].role!=="publisher"))return fail(reply);
     await pool.execute("INSERT IGNORE INTO series_grants(series_id,team_id,user_id,permission) VALUES(?,?,?,?)",[sid,teamId,userId,perm]);
     await log(actor.id,"series.grant","series",sid);
     return {ok:true};
