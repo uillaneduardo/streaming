@@ -145,3 +145,16 @@
  .media-tile-overlay{opacity:1;transform:none}
  .settings-category{padding:12px}
 }
+
+/* Build verification, catalogue availability and official YouTube minimal player */
+.app-version{font-size:11px;font-weight:650;letter-spacing:.02em;color:inherit;opacity:.7;white-space:nowrap}
+.public-loading{min-height:45vh;display:flex;flex-direction:column;align-items:start;justify-content:center;gap:12px}
+.public-loading h1{margin:0}
+.loading-track{width:160px;height:4px;background:#4b4d5a;border-radius:999px;overflow:hidden;position:relative}
+.loading-track::before{content:"";position:absolute;inset:0 60% 0 0;background:#ef715d;animation:loadingSlide 1s ease-in-out infinite alternate}
+@keyframes loadingSlide{to{transform:translateX(170px)}}
+.youtube-frame{position:absolute;inset:0;width:100%;height:100%}
+.youtube-frame iframe{width:100%;height:100%;border:0}
+.player-minimal-bar{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:12px 4px 0}
+.player-minimal-bar #player-hint{line-height:1.5}
+@media(max-width:620px){.player-minimal-bar{gap:8px}.player-minimal-bar #player-hint{font-size:11px}.app-version{font-size:10px}}
