@@ -1218,7 +1218,7 @@ function teamsAdmin(){return pageHead('Equipes e permissões','Colaboradores, pa
 function categorySettingsPanel(){const cats=categoriesList();return '<section class="panel form-surface-light settings-panel" id="settings-categories"><div class="row between" style="flex-wrap:wrap;gap:12px"><div><h2>Categorias das séries</h2><p class="muted tiny">Gerencie as classificações utilizadas no catálogo.</p></div>'+(studioUser?.isAdmin||!hosted?'<button type="button" class="btn primary" data-action="category-create">'+studioIcon('plus')+' Nova categoria</button>':'')+'</div><div class="stack" style="margin-top:18px">'+(cats.length?cats.map(c=>'<div class="item-card"><div class="item-info"><strong>'+esc(c.name)+'</strong><p class="muted tiny">'+Number(c.usageCount||0)+' série(s)</p></div>'+(studioUser?.isAdmin||!hosted?'<div class="row"><button type="button" class="btn small" data-action="category-edit" data-id="'+esc(c.id)+'">Editar</button><button type="button" class="btn small" data-action="category-delete" data-id="'+esc(c.id)+'" '+(Number(c.usageCount)>0?'disabled title="Categoria em uso"':'')+'>Excluir</button></div>':'')+'</div>').join(''):'<p class="muted">Nenhuma categoria cadastrada.</p>')+'</div></section>'}
 async function inlineCategoryCreate(button){
  const field=button.closest('.field'),input=field?.querySelector('#series-category-new');
- const name=input?.value.trim().replace(/\\s+/g,' ');
+ const name=input?.value.trim().replace(/\s+/g,' ');
  if(!name||name.length>100){toast('Informe um nome de até 100 caracteres.');input?.focus();return;}
  if(hosted&&!studioUser?.isAdmin){toast('Somente administradores podem adicionar categorias.');return;}
  button.disabled=true;
