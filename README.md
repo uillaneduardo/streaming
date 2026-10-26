@@ -25,7 +25,7 @@ compose.yml            # web + api + migrate + db
 ### Progresso
 A versão oficial do frontend foi importada do último protótipo aprovado e mantida visualmente inalterada; apenas CSS e JS foram separados do HTML. As imagens estão em `apps/web/assets/` e também funcionam com abertura direta de `apps/web/index.html`.
 
-A API expõe catálogo e disponibilidade com regras de publicação no backend. O portal consulta a API quando servido por HTTP e usa dados fictícios locais como fallback offline. O Studio já usa autenticação e autorização de equipe/série no backend. A edição de séries é persistente; os outros formulários continuam bloqueados enquanto migram para a API. Demais entidades editoriais ainda serão migradas nas próximas issues. Não use o Studio atual para gerir conteúdo real.
+A API expõe catálogo, equipes, temporadas, episódios, mídia e CMS com autenticação, permissões e persistência no MariaDB. O portal hospedado consulta apenas a API e **não exibe dados fictícios como fallback**. A demonstração local pode ser aberta sem servidor via HTML. Os uploads são mantidos em volume Docker persistente.
 
 ## Homelab
 ```bash
@@ -41,6 +41,8 @@ curl -fsS http://localhost:8088/api/v1/health
 curl -fsS http://localhost:8088/api/v1/public/bootstrap
 ```
 Somente o serviço `web` publica uma porta no host. `api` e `db` ficam na rede interna do Docker.
+
+**Instalação nova não cria séries ou equipes de demonstração.** Dados de exemplo estão isolados em `tests/fixtures/demo-catalog.sql` e só são carregados explicitamente nos testes. O serviço `migrate` registra as versões aplicadas para não repetir inserções ou estrutura do passado em deploys futuros. Em instalações antigas, os dados existentes são preservados e o baseline é registrado sem reinserir exemplos excluídos. Consulte [Migrações seguras](docs/MIGRATIONS.md).
 
 Consulte [docs/FRONTEND_BACKEND.md](docs/FRONTEND_BACKEND.md) e [docs/DEPLOY.md](docs/DEPLOY.md).
 
