@@ -16,3 +16,25 @@ Os vídeos são incorporados via YouTube; não são hospedados localmente.
 O Studio por enquanto apenas simula operações com `localStorage` e **não possui autenticação**. Evite disponibilizá-lo externamente até a próxima fase. A API é somente leitura.
 
 Atualizações posteriores: `git pull --ff-only origin main && sudo docker compose up -d --build`. Execute migrações versionadas antes de novas releases.
+
+## Criar o primeiro administrador (M1.1)
+Após subir os serviços, o portal continua público e gratuito. O Studio exige uma conta administrativa.
+Execute no shell do homelab (não há senha padrão; os valores são apenas temporários na sessão):
+```bash
+read -rp "E-mail do administrador: " BOOTSTRAP_EMAIL
+read -rp "Nome de exibição: " BOOTSTRAP_NAME
+read -rsp "Senha (mínimo 12 caracteres): " BOOTSTRAP_PASSWORD; echo
+export BOOTSTRAP_EMAIL BOOTSTRAP_NAME BOOTSTRAP_PASSWORD
+
+sudo --preserve-env=BOOTSTRAP_EMAIL,BOOTSTRAP_NAME,BOOTSTRAP_PASSWORD \
+  docker compose exec -T \
+  -e BOOTSTRAP_EMAIL -e BOOTSTRAP_NAME -e BOOTSTRAP_PASSWORD \
+  api node dist/bootstrap.js
+
+unset BOOTSTRAP_EMAIL BOOTSTRAP_NAME BOOTSTRAP_PASSWORD
+```
+Bootstrap só funciona antes da criação do primeiro administrador; não sobrescreve credenciais existentes.
+
+Para sessão com HTTPS por Cloudflare Tunnel defina `COOKIE_SECURE=true` no `.env` e recrie o container API. Acesso com cookie Secure não funcionará em HTTP comum. Nunca exponha o login externamente sem HTTPS.
+
+As credenciais não devem entrar no GitHub, no arquivo `.env` versionado nem nos logs do terminal. O Studio aceita login/logout, exibe somente as produções autorizadas e persiste **edição de séries**. Demais editores permanecem bloqueados até a implementação específica.
