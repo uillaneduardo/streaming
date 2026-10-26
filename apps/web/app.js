@@ -134,5 +134,4 @@ if(hosted){
     }).catch(()=>{});
   void loadSession();
 }
-}
 })();
