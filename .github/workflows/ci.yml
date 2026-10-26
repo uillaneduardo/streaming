@@ -5,19 +5,38 @@ on:
   pull_request:
     branches: [main]
 jobs:
-  static-checks:
+  frontend:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Validate JS syntax
-        run: node --check prototype/app.js && node --check tests/static-smoke.cjs
-      - name: Verify static navigation and local assets
-        run: node tests/static-smoke.cjs
-      - name: Check deployment manifests
+      - name: JavaScript syntax (official UI)
+        run: node --check apps/web/app.js
+      - name: Offline artwork and navigation contract
+        run: node tests/official-ui-smoke.cjs
+      - name: Build manifest checks
         run: |
-          test -f Dockerfile
           test -f compose.yml
-          test -f prototype/index.html
+          test -f apps/web/Dockerfile
+          test -f apps/api/Dockerfile
+          test -f apps/api/sql/001_initial.sql
+  api:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Test release policy
+        run: npm test
+      - name: Compile API
+        run: npm run build
