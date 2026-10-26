@@ -133,7 +133,7 @@ async function saveRemoteSettings(form){
     logoUrl:String(f.get('logoUrl')||'').trim(),iconUrl:String(f.get('iconUrl')||'').trim()};
   try{
     await apiRequest('/api/v1/studio/settings',{method:'PUT',body:JSON.stringify(payload)});
-    await fetchStudioData();toast('Configurações salvas no servidor.');
+    await fetchStudioData();await refreshPublicCatalog();toast('Configurações salvas no servidor.');
   }catch(error){toast(error.message||'Não foi possível atualizar configurações.')}
 }
 
@@ -301,7 +301,7 @@ function refreshMediaResults(){
 let catalogView=localStorage.getItem('cenalivre-catalog-view')==='list'?'list':'grid';let homeView='grid';
 let route={},filterCategory='Todas',searchTerm='',studioSection='';const nav=(path)=>{location.hash=path;window.scrollTo(0,0)};const parse=()=>{let p=location.hash.slice(1)||'/';route={path:p,parts:p.split('/').filter(Boolean),studio:p.startsWith('/studio')};if(!p.startsWith('/assistir/'))activeVideo=null};let activeVideo=null;
 function toast(msg){const el=document.getElementById('toast-root');el.innerHTML=`<div class="toast">${esc(msg)}</div>`;setTimeout(()=>{if(el)el.innerHTML=''},3000)}
-function publicNav(){return `<header class="public-nav"><a class="brand" href="#/">CENA<em>LIVRE</em></a><a class="nav-link ${route.path==='/'?'active':''}" href="#/">Início</a><a class="nav-link ${route.path.startsWith('/explorar')?'active':''}" href="#/explorar">Explorar</a><a class="nav-link" href="#/explorar?cat=Documentário">Documentários</a><div class="nav-fill"></div><button class="btn ghost small" data-action="go-studio">◧ &nbsp; Studio</button></header>`}
+function publicNav(){return `<header class="public-nav"><a class="brand" href="#/">${db.preferences?.logoUrl?`<img class="site-logo" src="${esc(db.preferences.logoUrl)}" alt="${esc(db.preferences.siteName||"CenaLivre")}">`:"CENA<em>LIVRE</em>"}</a><a class="nav-link ${route.path==='/'?'active':''}" href="#/">Início</a><a class="nav-link ${route.path.startsWith('/explorar')?'active':''}" href="#/explorar">Explorar</a><a class="nav-link" href="#/explorar?cat=Documentário">Documentários</a><div class="nav-fill"></div><button class="btn ghost small" data-action="go-studio">◧ &nbsp; Studio</button></header>`}
 function poster(s){return `<a href="#/serie/${esc(s.id)}" class="poster-card"><div class="poster-img" style="background-image:${heroImg(s.poster)}"><span class="tag">${esc(s.category)}</span></div><div class="poster-title">${esc(s.title)}</div><div class="poster-sub">${seasons(s.id).length} temporada(s) · ${epOrder(s.id).length} episódio(s)</div><p class="poster-description">${esc(s.summary)}</p></a>`}
 function cardGrid(items){return items.length?`<div class="grid-cards ${catalogView==='list'?'list-cards':''}">${items.map(poster).join('')}</div>`:`<div class="empty">Nenhuma produção encontrada.</div>`}
 function viewSwitch(){return `<div class="view-switch" role="group" aria-label="Modo de visualização"><button class="view-option ${catalogView==='grid'?'selected':''}" data-action="catalog-view" data-view="grid" aria-pressed="${catalogView==='grid'}" title="Visualização em grade">▦ <span>Grade</span></button><button class="view-option ${catalogView==='list'?'selected':''}" data-action="catalog-view" data-view="list" aria-pressed="${catalogView==='list'}" title="Visualização em lista">☷ <span>Lista</span></button></div>`}
@@ -347,7 +347,13 @@ function settingsAdmin(){return pageHead('Configurações','Identidade, informa�
 function studioPage(){const page=route.parts[1]||'dashboard';return studioFrame(({dashboard,series:seriesAdmin,seasons:seasonsAdmin,episodes:episodesAdmin,media:mediaAdmin,schedule:scheduleAdmin,homepage:homepageAdmin,teams:teamsAdmin,settings:settingsAdmin}[page]||dashboard)())}
 function render(){parse();
 db=route.studio?(hosted?(studioData||publicData):localDemo):publicData;
-document.title=`CenaLivre — ${route.studio?'Studio':'Séries gratuitas'}`;const root=document.getElementById('app');if(route.studio){
+document.title=`CenaLivre — ${route.studio?'Studio':'Séries gratuitas'}`;
+if(!route.studio&&db.preferences?.iconUrl){
+  let icon=document.querySelector('link[rel="icon"]');
+  if(!icon){icon=document.createElement('link');icon.rel='icon';document.head.append(icon)}
+  icon.href=db.preferences.iconUrl;
+}
+const root=document.getElementById('app');if(route.studio){
   if(hosted&&!studioUser){root.innerHTML=studioLogin();return}
   if(hosted&&!studioData){root.innerHTML=publicNav()+'<main class="container"><p>Carregando Studio...</p></main>';return}
   root.innerHTML=studioPage();return
@@ -474,6 +480,7 @@ if(hosted){
       if(!payload||!Array.isArray(payload.series))return;
       for(const key of ['series','seasons','episodes','banners','homeSections']){
         if(Array.isArray(payload[key]))publicData[key]=payload[key];
+      if(payload.branding)publicData.preferences={...publicData.preferences,...payload.branding};
       }
       if(!location.hash.startsWith('#/studio'))render();
     }).catch(()=>{});
