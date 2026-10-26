@@ -861,7 +861,7 @@ function catalogRows(type){
    '<td class="catalog-wrap">'+esc((s.teamIds||[]).map(id=>by('teams',id)?.name).filter(Boolean).join(', ')||'Sem equipe')+'</td>'+
    '<td><button class="btn small catalog-count" data-action="catalog-to-seasons" data-id="'+esc(s.id)+'">'+count+' temp. · '+epCount+' ep.</button></td>'+
    '<td class="catalog-row-actions"><button class="btn small" data-action="series-artwork" data-id="'+esc(s.id)+'">Imagens</button>'+
-   '<button class="btn small" data-action="edit-series" data-id="'+esc(s.id)+'">Editar</button>'+
+   historyAction('series',s.id)+'<button class="btn small" data-action="edit-series" data-id="'+esc(s.id)+'">Editar</button>'+
    '<button class="btn small catalog-delete" data-action="delete-series" data-id="'+esc(s.id)+'">Excluir</button></td></tr>';
  }).join('');
  if(type==='seasons')return items.map(season=>{
@@ -871,7 +871,7 @@ function catalogRows(type){
    '<td><div><strong>'+esc(season.title)+'</strong><div class="catalog-status-text">'+
    ((season.status||'published')==='published'?'Publicado':season.status==='suspended'?'Suspenso':'Rascunho')+'</div></div></td>'+
    '<td><button class="btn small catalog-count" data-action="catalog-to-episodes" data-id="'+esc(season.seriesId)+'">'+number+' episódios</button></td>'+
-   '<td class="catalog-row-actions"><button class="btn small" data-action="edit-season" data-id="'+esc(season.id)+'">Editar</button>'+
+   '<td class="catalog-row-actions">'+historyAction('seasons',season.id)+'<button class="btn small" data-action="edit-season" data-id="'+esc(season.id)+'">Editar</button>'+
    '<button class="btn small catalog-delete" data-action="delete-season" data-id="'+esc(season.id)+'">Excluir</button></td></tr>';
  }).join('');
  return items.map(e=>{
@@ -882,7 +882,7 @@ function catalogRows(type){
    '<td class="catalog-wrap">'+esc(production?.title||'Série indisponível')+'</td>'+
    '<td><span class="badge '+(e.status==='published'?'green':e.status==='scheduled'?'orange':'blue')+'">'+stateLabel+'</span></td>'+
    '<td>'+esc(e.releaseAt?dt(e.releaseAt):'Sem data')+'</td>'+
-   '<td class="catalog-row-actions"><button class="btn small" data-action="edit-episode" data-id="'+esc(e.id)+'">Editar</button>'+
+   '<td class="catalog-row-actions">'+historyAction('episodes',e.id)+'<button class="btn small" data-action="edit-episode" data-id="'+esc(e.id)+'">Editar</button>'+
    '<button class="btn small catalog-delete" data-action="delete-episode" data-id="'+esc(e.id)+'">Excluir</button></td></tr>';
  }).join('');
 }
@@ -1046,7 +1046,7 @@ function editorialRows(type){
  '<div><strong>'+esc(b.title)+'</strong><div class="muted tiny">'+esc(by('series',b.target)?.title||'Sem destino')+'</div></div></div></td>'+
  '<td><span class="badge '+(bannerState(b)==='active'?'green':bannerState(b)==='inactive'?'blue':'orange')+'">'+bannerStateLabel(b)+'</span></td>'+
  '<td>'+esc(b.startAt?dt(b.startAt):'Imediato')+'</td><td>'+esc(b.endAt?dt(b.endAt):'Sem término')+'</td>'+
- '<td class="catalog-row-actions"><button class="btn small" data-action="edit-banner" data-id="'+esc(b.id)+'">Editar</button>'+
+ '<td class="catalog-row-actions">'+historyAction('banners',b.id)+'<button class="btn small" data-action="edit-banner" data-id="'+esc(b.id)+'">Editar</button>'+
  '<button class="btn small catalog-delete" data-action="editorial-delete" data-type="banners" data-id="'+esc(b.id)+'">Excluir</button></td></tr>').join('');
  if(type==='sections')return items.map((x)=>{
   const index=db.homeSections.findIndex(s=>s.id===x.id);
@@ -1320,6 +1320,74 @@ async function deleteCategory(id){
   render();toast('Categoria excluída.');
  }catch(error){toast(error.message)}
 }
+const reviewKindNames={series:'Série',season:'Temporada',episode:'Episódio',banner:'Banner'};
+function reviewKind(type){return {series:'series',seasons:'season',episodes:'episode',banners:'banner'}[type]||type}
+async function openEditorialHistory(type,id){
+ const kind=reviewKind(type);
+ if(!reviewKindNames[kind])return;
+ modal('Revisão editorial','<p class="muted">Carregando histórico...</p>');
+ try{
+  const data=await apiRequest('/api/v1/studio/editorial/'+encodeURIComponent(kind)+'/'+encodeURIComponent(id)+'/history',{cache:'no-store'});
+  const versionList=(data.versions||[]),reviews=(data.reviews||[]);
+  const revisions=versionList.map((v,i)=>{
+   const previous=versionList[i+1]?.snapshot||{};
+   const changeNames=Object.keys(v.snapshot||{}).filter(k=>JSON.stringify(v.snapshot[k])!==JSON.stringify(previous[k]));
+   return '<details class="review-version"><summary><strong>Versão #'+v.id+'</strong> · '+
+    esc(({baseline:'Inicial',created:'Criada',updated:'Atualizada',deleted:'Excluída'}[v.operation]||v.operation))+
+    ' · '+esc(v.createdAt?dt(v.createdAt):'')+'</summary>'+
+    '<p class="muted tiny">Campos: '+esc(changeNames.join(', ')||'sem alterações')+'</p>'+
+    '<pre class="review-json">'+esc(JSON.stringify(v.snapshot,null,2))+'</pre></details>';
+  }).join('');
+  const reviewRows=reviews.map(r=>{
+   const state={pending:'Aguardando',approved:'Aprovado',rejected:'Rejeitado',stale:'Desatualizado'}[r.state]||r.state;
+   return '<div class="review-card"><div class="row between"><strong>'+esc(state)+'</strong><span class="muted tiny">'+
+    esc(r.submittedAt?dt(r.submittedAt):'')+'</span></div>'+
+    '<div class="muted tiny">Solicitante: '+esc(r.submittedBy||'')+' · Versão #'+r.versionId+'</div>'+
+    (r.message?'<p>'+esc(r.message)+'</p>':'')+
+    (r.decisionNote?'<p class="muted tiny">Parecer: '+esc(r.decisionNote)+'</p>':'')+
+    (r.state==='pending'?'<div class="review-decision"><textarea class="textarea" data-review-note="'+esc(r.id)+
+     '" placeholder="Parecer da revisão (opcional)" maxlength="1000"></textarea>'+
+     '<div class="row"><button class="btn small primary" type="button" data-action="review-decide" data-decision="approve" data-id="'+esc(r.id)+'" data-kind="'+esc(kind)+'" data-target="'+esc(id)+'">Aprovar e publicar</button>'+
+     '<button class="btn small" type="button" data-action="review-decide" data-decision="reject" data-id="'+esc(r.id)+'" data-kind="'+esc(kind)+'" data-target="'+esc(id)+'">Rejeitar</button></div></div>':'')+
+    '</div>';
+  }).join('');
+  const body='<div class="review-history"><p class="muted tiny">As versões são preservadas automaticamente a cada alteração, inclusive em ações em lote.</p>'+
+   '<form id="review-submit-form" data-kind="'+esc(kind)+'" data-id="'+esc(id)+'" class="review-request">'+
+   '<label>Observações para a revisão</label><textarea class="textarea" name="message" maxlength="1000" placeholder="O que deve ser avaliado?"></textarea>'+
+   '<button class="btn primary small" type="submit">Solicitar revisão</button></form>'+
+   '<h3>Solicitações</h3>'+(reviewRows||'<p class="muted">Nenhuma solicitação registrada.</p>')+
+   '<h3>Histórico de versões</h3>'+(revisions||'<p class="muted">Ainda não existem versões.</p>')+'</div>';
+  modal('Histórico · '+reviewKindNames[kind],body);
+ }catch(error){modal('Revisão editorial','<p class="muted">'+esc(error.message)+'</p>')}
+}
+async function submitEditorialReview(form){
+ const kind=form.dataset.kind,id=form.dataset.id,button=form.querySelector('[type="submit"]');
+ if(button)button.disabled=true;
+ try{
+  const note=String(new FormData(form).get('message')||'');
+  await apiRequest('/api/v1/studio/editorial/'+encodeURIComponent(kind)+'/'+encodeURIComponent(id)+'/submit',{
+   method:'POST',body:JSON.stringify({message:note})
+  });
+  toast('Revisão solicitada.');await openEditorialHistory(kind,id);
+ }catch(error){toast(error.message);if(button)button.disabled=false}
+}
+async function decideEditorialReview(button){
+ const {id,kind,target,decision}=button.dataset;
+ const note=document.querySelector('[data-review-note="'+id+'"]')?.value||'';
+ button.disabled=true;
+ try{
+  await apiRequest('/api/v1/studio/editorial/reviews/'+encodeURIComponent(id)+'/decision',{
+   method:'POST',body:JSON.stringify({decision,note})
+  });
+  await fetchStudioData();await refreshPublicCatalog();
+  await openEditorialHistory(kind,target);
+  toast(decision==='approve'?'Revisão aprovada e conteúdo publicado.':'Revisão rejeitada.');
+ }catch(error){toast(error.message);button.disabled=false}
+}
+function historyAction(type,id){
+ return '<button class="btn small" type="button" data-action="review-open" data-type="'+type+
+ '" data-id="'+esc(id)+'">Histórico</button>';
+}
 function openSeriesArtwork(seriesId){
  const s=by('series',seriesId);
  if(!s)return;
@@ -1476,6 +1544,8 @@ if(action==='category-quick'){
  return;
 }
 if(action==='category-quick-save'){void saveQuickCategory(el);return}
+if(action==='review-open'){void openEditorialHistory(el.dataset.type,eid);return}
+if(action==='review-decide'){void decideEditorialReview(el);return}
 if(action==='invite-open'){inviteModal();return}
 if(action==='invite-revoke'){void revokeInvitation(eid);return}
 if(action==='invite-copy'){
@@ -1608,6 +1678,7 @@ document.addEventListener('click',e=>{
  if(el.tagName==='BUTTON')e.preventDefault();
  handle(el.dataset.action,el);
 });document.addEventListener('submit',e=>{e.preventDefault();
+if(e.target.id==='review-submit-form'){void submitEditorialReview(e.target);return}
 if(e.target.id==='category-form'){void saveCategoryForm(e.target);return;}
 if(e.target.id==='studio-invite-form'){void createInvitation(e.target);return;}
 if(e.target.id==='invite-accept-form'){
