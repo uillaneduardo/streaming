@@ -19,7 +19,12 @@ async function apiRequest(url,options={}){
   return result;
 }
 async function fetchStudioData(){
-  studioData=await apiRequest('/api/v1/studio/bootstrap');
+  const payload=await apiRequest('/api/v1/studio/bootstrap');
+  let settings=initial().preferences;
+  if(studioUser?.isAdmin){
+    try{settings=await apiRequest('/api/v1/studio/settings')}catch(error){console.warn('Configurações indisponíveis',error)}
+  }
+  studioData={...initial(),...payload,preferences:settings,saved:[]};
   render();
 }
 async function loadSession(){
@@ -47,24 +52,81 @@ async function logoutStudio(){
   studioUser=null;csrfToken='';studioData=null;nav('/');render();
 }
 function studioLogin(){
-  return publicNav()+'<main class="container" style="max-width:480px;margin:60px auto 120px"><div class="panel"><h1>Entrar no Studio</h1><p class="muted">Acesso reservado às equipes autorizadas.</p><form id="studio-login" class="stack">'+
+  return publicNav()+'<main class="container" style="max-width:520px;margin:60px auto 120px"><div class="auth-panel form-surface-light"><h1>Entrar no Studio</h1><p class="muted">Acesso reservado às equipes autorizadas.</p><form id="studio-login" class="stack">'+
     '<div class="field"><label>E-mail</label><input class="input" type="email" name="email" autocomplete="username" required></div>'+
     '<div class="field"><label>Senha</label><input class="input" type="password" name="password" autocomplete="current-password" required></div>'+
     '<button class="btn primary" type="submit">Entrar</button></form></div></main>';
 }
-async function saveRemoteSeries(form){
-  const id=form.dataset.id;
-  if(!id){toast('Criação de séries será habilitada após a próxima integração.');return;}
-  const data=new FormData(form);
-  const payload={title:String(data.get('title')||''),category:String(data.get('category')||''),
-    summary:String(data.get('summary')||''),poster:String(data.get('poster')||''),banner:String(data.get('banner')||'')};
-  if(studioUser?.isAdmin)payload.featured=data.has('featured');
+
+const datetimeLocal=value=>{
+  if(!value)return '';
+  const d=new Date(value);
+  if(!Number.isFinite(d.getTime()))return String(value).slice(0,16);
+  const offset=d.getTimezoneOffset()*60000;
+  return new Date(d.getTime()-offset).toISOString().slice(0,16);
+};
+const isoFromInput=value=>value?new Date(value).toISOString():null;
+async function refreshPublicCatalog(){
   try{
-    await apiRequest('/api/v1/studio/series/'+encodeURIComponent(id),{method:'PUT',body:JSON.stringify(payload)});
+    const result=await apiRequest('/api/v1/public/bootstrap');
+    for(const key of ['series','seasons','episodes','banners','homeSections'])if(Array.isArray(result[key]))publicData[key]=result[key];
+  }catch(error){console.warn('Catálogo não atualizado',error)}
+}
+async function saveRemoteEntity(form){
+  const type=form.dataset.form,id=form.dataset.id;
+  const f=new FormData(form),pick=n=>String(f.get(n)||'').trim();
+  const method=id?'PUT':'POST';
+  let path='',payload={};
+  try{
+    if(type==='series'){
+      path='/api/v1/studio/series'+(id?'/'+encodeURIComponent(id):'');
+      payload={title:pick('title'),category:pick('category'),summary:pick('summary'),
+        poster:pick('poster'),banner:pick('banner')};
+      if(studioUser?.isAdmin)payload.featured=f.has('featured');
+      if(!id)payload.teamIds=f.getAll('teamIds');
+      if(!id)payload.visibility=studioUser?.isAdmin?pick('visibility')||'draft':'draft';
+      if(!id&&!payload.teamIds.length){toast('Escolha ao menos uma equipe responsável.');return;}
+    }else if(type==='teams'){
+      path='/api/v1/studio/teams'+(id?'/'+encodeURIComponent(id):'');
+      payload={name:pick('name'),description:pick('description')};
+    }else if(type==='members'){
+      path='/api/v1/studio/members'+(id?'/'+encodeURIComponent(id):'');
+      payload={name:pick('name'),teamId:pick('teamId'),role:pick('role')};
+      if(!id){payload.email=pick('email');payload.password=pick('password')}
+    }else if(type==='seasons'){
+      path='/api/v1/studio/seasons'+(id?'/'+encodeURIComponent(id):'');
+      payload={seriesId:pick('seriesId'),number:Number(pick('number')),title:pick('title')};
+    }else if(type==='episodes'){
+      path='/api/v1/studio/episodes'+(id?'/'+encodeURIComponent(id):'');
+      const release=pick('releaseAt'),end=pick('endAt');
+      if(end&&release&&new Date(end)<=new Date(release)){toast('O fim precisa ser posterior à estreia.');return;}
+      payload={seasonId:pick('seasonId'),number:Number(pick('number')),title:pick('title'),
+        summary:pick('summary'),duration:Number(pick('duration')||20),youtube:pick('youtube'),
+        thumbnail:pick('thumbnail'),releaseAt:isoFromInput(release),endAt:isoFromInput(end),status:pick('status')};
+    }else{toast('Esta operação ainda não está habilitada no servidor.');return}
+    const btn=form.querySelector('[type="submit"]');if(btn)btn.disabled=true;
+    await apiRequest(path,{method,body:JSON.stringify(payload)});
+    if(type==='series'&&id&&studioUser?.isAdmin&&pick('visibility')&&
+       pick('visibility')!==by('series',id)?.visibility){
+      await apiRequest('/api/v1/studio/series/'+encodeURIComponent(id)+'/visibility',
+        {method:'POST',body:JSON.stringify({visibility:pick('visibility')})});
+    }
     await fetchStudioData();
+    if(type==='series'||type==='seasons'||type==='episodes')await refreshPublicCatalog();
     document.getElementById('modal-root').innerHTML='';
-    toast('Série atualizada no servidor.');
-  }catch(error){toast(error.message||'Falha ao salvar.');}
+    render();toast('Alterações salvas no servidor.');
+  }catch(error){toast(error.message||'Não foi possível salvar.');const btn=form.querySelector('[type="submit"]');if(btn)btn.disabled=false;}
+}
+async function saveRemoteSettings(form){
+  if(!studioUser?.isAdmin){toast('Somente o administrador pode editar configurações.');return;}
+  const f=new FormData(form);
+  const payload={siteName:String(f.get('siteName')||'').trim(),
+    siteDescription:String(f.get('siteDescription')||''),
+    contactEmail:String(f.get('contactEmail')||'').trim(),autoplay:f.has('autoplay')};
+  try{
+    await apiRequest('/api/v1/studio/settings',{method:'PUT',body:JSON.stringify(payload)});
+    await fetchStudioData();toast('Configurações salvas no servidor.');
+  }catch(error){toast(error.message||'Não foi possível atualizar configurações.')}
 }
 
 let catalogView=localStorage.getItem('cenalivre-catalog-view')==='list'?'list':'grid';let homeView='grid';
@@ -105,7 +167,7 @@ document.title=`CenaLivre — ${route.studio?'Studio':'Séries gratuitas'}`;cons
   if(hosted&&!studioData){root.innerHTML=publicNav()+'<main class="container"><p>Carregando Studio...</p></main>';return}
   root.innerHTML=studioPage();return
 }let content=route.path==='/'?home():route.parts[0]==='explorar'?explore():route.parts[0]==='serie'?seriesPage(route.parts[1]):route.parts[0]==='assistir'?watchPage(route.parts[1]):route.parts[0]==='entrar'?'<main class="container"><button class="btn primary" data-action="go-studio">Entrar no Studio</button></main>':missing();root.innerHTML=publicNav()+content+`<footer class="footer">CenaLivre · Protótipo navegável · Conteúdos e pessoas fictícios · Sem hospedagem de vídeos</footer>`}
-function modal(title,body){document.getElementById('modal-root').innerHTML=`<div class="modal-backdrop" data-action="close-modal"><div class="modal" role="dialog" aria-modal="true" aria-label="${esc(title)}"><div class="row between"><h2>${esc(title)}</h2><button class="btn small" data-action="close-modal">✕</button></div>${body}</div></div>`}
+function modal(title,body){document.getElementById('modal-root').innerHTML=`<div class="modal-backdrop" data-action="close-modal"><div class="modal form-surface-light" role="dialog" aria-modal="true" aria-label="${esc(title)}"><div class="row between"><h2>${esc(title)}</h2><button class="btn small" data-action="close-modal">✕</button></div>${body}</div></div>`}
 const field=(label,name,value='',type='text',extra='')=>`<div class="field"><label>${label}</label><input class="input" name="${name}" type="${type}" value="${esc(value)}" ${extra}></div>`;const area=(label,name,value='')=>`<div class="field span2"><label>${label}</label><textarea class="textarea" name="${name}">${esc(value)}</textarea></div>`;const select=(label,name,opts,selected)=>`<div class="field"><label>${label}</label><select class="select" name="${name}">${opts.map(x=>`<option value="${esc(x.id)}" ${x.id===selected?'selected':''}>${esc(x.title||x.name)}</option>`).join('')}</select></div>`;const submit=`<div class="span2 row between" style="margin-top:12px"><button type="button" class="btn" data-action="close-modal">Cancelar</button><button type="submit" class="btn primary">Salvar alterações</button></div>`;
 function openEditor(type,entityId){const editing=!!entityId,x=editing?by(type,entityId):null;let body='';if(type==='series'){body=`<form class="form-grid" data-form="series" data-id="${entityId||''}">${field('Título','title',x?.title,'text','required')}${field('Categoria','category',x?.category||'Documentário','text','required')}${area('Sinopse','summary',x?.summary)}${field('URL do pôster vertical','poster',x?.poster||img('new-poster',650,900))}${field('URL do banner horizontal','banner',x?.banner||img('new-banner',1300,700))}<div class="field span2"><label>Equipes responsáveis (selecione uma ou mais)</label><div class="pillset">${db.teams.map(t=>`<label class="pill"><input type="checkbox" name="teamIds" value="${t.id}" ${(x?.teamIds||[]).includes(t.id)?'checked':''}> ${esc(t.name)}</label>`).join('')}</div></div><label class="span2"><input type="checkbox" name="featured" ${x?.featured?'checked':''}> Destaque no portal</label>${submit}</form>`}else if(type==='seasons'){body=`<form class="form-grid" data-form="seasons" data-id="${entityId||''}">${select('Série','seriesId',db.series,x?.seriesId)}${field('Número','number',x?.number||seasons(db.series[0]?.id).length+1,'number','min="1" required')}${field('Título da temporada','title',x?.title||'Nova temporada','text','required')}${submit}</form>`}else if(type==='episodes'){body=`<form class="form-grid" data-form="episodes" data-id="${entityId||''}">${select('Temporada','seasonId',db.seasons.map(s=>({...s,title:`${by('series',s.seriesId)?.title} — T${s.number}`})),x?.seasonId)}${field('Número do episódio','number',x?.number||1,'number','min="1" required')}${field('Título','title',x?.title,'text','required')}${field('Duração estimada (min)','duration',x?.duration||20,'number','min="1"')}${area('Sinopse','summary',x?.summary)}${field('URL ou ID do vídeo YouTube','youtube',x?.youtube)}${field('URL da thumbnail','thumbnail',x?.thumbnail||img('new-episode',1200,700))}${field('Disponível a partir de','releaseAt',x?.releaseAt||future(1),'datetime-local','required')}${field('Disponível até (opcional)','endAt',x?.endAt,'datetime-local')}${select('Estado editorial','status',[{id:'published',title:'Aprovado / publicado'},{id:'scheduled',title:'Agendado'},{id:'draft',title:'Rascunho'},{id:'suspended',title:'Suspenso'}],x?.status||'scheduled')}${submit}</form>`}else if(type==='banners'){body=`<form class="form-grid" data-form="banners" data-id="${entityId||''}">${field('Título','title',x?.title,'text','required')}${field('Prioridade (menor primeiro)','order',x?.order||1,'number','min="1"')}${area('Texto de apoio','subtitle',x?.subtitle)}${field('Imagem desktop (URL)','image',x?.image||img('new-campaign',1400,800))}${field('Imagem mobile (URL opcional)','mobileImage',x?.mobileImage)}${select('Destino: série','target',db.series,x?.target)}${field('Início da campanha','startAt',x?.startAt||future(1),'datetime-local')}${field('Fim da campanha','endAt',x?.endAt,'datetime-local')}<label class="span2"><input type="checkbox" name="active" ${x?.active!==false?'checked':''}> Campanha habilitada</label>${submit}</form>`}else if(type==='teams'){body=`<form class="form-grid" data-form="teams" data-id="${entityId||''}">${field('Nome da equipe','name',x?.name,'text','required')}${field('Descrição','description',x?.description)}${submit}</form>`}else if(type==='members'){body=`<form class="form-grid" data-form="members" data-id="${entityId||''}">${field('Nome','name',x?.name,'text','required')}${field('E-mail','email',x?.email,'email','required')}${select('Equipe','teamId',db.teams,x?.teamId)}${select('Papel demonstrativo','role',[{id:'Gestora',title:'Gestora'},{id:'Produtor',title:'Produtor'},{id:'Editor',title:'Editor'},{id:'Publicador',title:'Publicador'},{id:'Colaborador',title:'Colaborador'}],x?.role||'Editor')}${submit}</form>`}else if(type==='media'){body=`<form class="form-grid" data-form="media">${field('Nome do arquivo','name','','text','required')}${field('URL da imagem','url','','url','required')}${submit}</form>`}if(hosted&&type==='series'){
   body=body.replaceAll('name="teamIds"','name="teamIds" disabled');
