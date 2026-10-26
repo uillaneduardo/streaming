@@ -1336,7 +1336,7 @@ async function openEditorialHistory(type,id){
     esc(({baseline:'Inicial',created:'Criada',updated:'Atualizada',deleted:'Excluída'}[v.operation]||v.operation))+
     ' · '+esc(v.createdAt?dt(v.createdAt):'')+'</summary>'+
     '<p class="muted tiny">Campos: '+esc(changeNames.join(', ')||'sem alterações')+'</p>'+
-    '<pre class="review-json">'+esc(JSON.stringify(v.snapshot,null,2))+'</pre></details>';
+    '<pre class="review-json">'+esc(JSON.stringify(v.snapshot,null,2))+'</pre>'+    '<button type="button" class="btn small" data-action="review-restore" data-kind="'+esc(kind)+    '" data-id="'+esc(id)+'" data-version="'+v.id+'">Restaurar metadados</button></details>';
   }).join('');
   const reviewRows=reviews.map(r=>{
    const state={pending:'Aguardando',approved:'Aprovado',rejected:'Rejeitado',stale:'Desatualizado'}[r.state]||r.state;
@@ -1359,6 +1359,18 @@ async function openEditorialHistory(type,id){
    '<h3>Histórico de versões</h3>'+(revisions||'<p class="muted">Ainda não existem versões.</p>')+'</div>';
   modal('Histórico · '+reviewKindNames[kind],body);
  }catch(error){modal('Revisão editorial','<p class="muted">'+esc(error.message)+'</p>')}
+}
+async function restoreEditorialVersion(button){
+ const {kind,id,version}=button.dataset;
+ if(!window.confirm('Restaurar os metadados desta versão? O estado de publicação e as permissões atuais serão mantidos.'))return;
+ button.disabled=true;
+ try{
+  await apiRequest('/api/v1/studio/editorial/'+encodeURIComponent(kind)+'/'+encodeURIComponent(id)+'/restore',{
+   method:'POST',body:JSON.stringify({versionId:Number(version)})
+  });
+  await fetchStudioData();await refreshPublicCatalog();await openEditorialHistory(kind,id);
+  toast('Versão restaurada. Uma nova entrada foi salva no histórico.');
+ }catch(error){toast(error.message);button.disabled=false}
 }
 async function submitEditorialReview(form){
  const kind=form.dataset.kind,id=form.dataset.id,button=form.querySelector('[type="submit"]');
@@ -1545,6 +1557,7 @@ if(action==='category-quick'){
 }
 if(action==='category-quick-save'){void saveQuickCategory(el);return}
 if(action==='review-open'){void openEditorialHistory(el.dataset.type,eid);return}
+if(action==='review-restore'){void restoreEditorialVersion(el);return}
 if(action==='review-decide'){void decideEditorialReview(el);return}
 if(action==='invite-open'){inviteModal();return}
 if(action==='invite-revoke'){void revokeInvitation(eid);return}
