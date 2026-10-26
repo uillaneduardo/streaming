@@ -314,7 +314,7 @@ async function call(path,method='GET',body){
   assert.equal(episodeHistory.code,200,'Episode history access');
   assert(episodeHistory.data.versions.length>=3,'Episode snapshots cover status changes in batch');
   assert(episodeHistory.data.versions.some(v=>v.operation==='created'),'Episode create snapshot preserved');
-  assert.equal(episodeHistory.data.versions[0].snapshot.title,'Episódio piloto atualizado');
+  assert.equal(episodeHistory.data.versions[0].snapshot.title,'Episódio publicado');
   const submitReview=await call(reviewPath('episode',episodeId)+'/submit','POST',{message:'Avaliar edição do episódio'});
   assert.equal(submitReview.code,201,'Submit review of current revision');
   assert.equal((await call(reviewPath('episode',episodeId)+'/submit','POST',{message:'Repetido'})).code,409,'No duplicated pending review');
