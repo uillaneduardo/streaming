@@ -1,18 +1,19 @@
 import {createHash,randomBytes,scrypt as scryptCb,timingSafeEqual} from "node:crypto";
-import {promisify} from "node:util";
-const scrypt=promisify(scryptCb);
 const OPTIONS={N:16384,r:8,p:1,maxmem:64*1024*1024};
+const scrypt=(password:string,salt:string)=>new Promise<Buffer>((resolve,reject)=>{
+  scryptCb(password,salt,64,OPTIONS,(error,key)=>error?reject(error):resolve(key));
+});
 export async function hashPassword(password:string) {
   if(typeof password!=="string"||password.length<12||password.length>128) throw new Error("password_length");
   const salt=randomBytes(16).toString("hex");
-  const derived=await scrypt(password,salt,64,OPTIONS) as Buffer;
+  const derived=await scrypt(password,salt);
   return "scrypt$"+salt+"$"+derived.toString("hex");
 }
 export async function verifyPassword(password:unknown,record:string) {
   if(typeof password!=="string"||password.length>128||!record.startsWith("scrypt$")) return false;
   const [,salt,hash]=record.split("$");
   if(!/^[a-f0-9]{32}$/.test(salt||"")||!/^[a-f0-9]{128}$/.test(hash||""))return false;
-  const known=Buffer.from(hash,"hex"),calculated=await scrypt(password,salt,64,OPTIONS) as Buffer;
+  const known=Buffer.from(hash,"hex"),calculated=await scrypt(password,salt);
   return timingSafeEqual(known,calculated);
 }
 export const normalizeEmail=(value:unknown):string|null=>{
