@@ -3,11 +3,13 @@ import type { RowDataPacket } from "mysql2";
 import { pool } from "./db.js";
 import {registerAuth} from "./auth.js";
 import {registerStudio} from "./studio.js";
+import {registerStudioManagement} from "./studio-management.js";
 import { publicEpisodeState, sanitizedYoutubeId } from "./domain/release.js";
 
 const app = Fastify({ logger: true, trustProxy: true, bodyLimit:1024*1024 });
 registerAuth(app);
 registerStudio(app);
+registerStudioManagement(app);
 type Row = RowDataPacket & Record<string, unknown>;
 const records = async (sql:string):Promise<Row[]> => {
   const [rows] = await pool.query<RowDataPacket[]>(sql);

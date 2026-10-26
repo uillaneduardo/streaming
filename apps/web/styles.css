@@ -30,3 +30,30 @@
 .home-episodes-list .home-episode img{height:100%;min-height:130px;aspect-ratio:auto}
 @media(max-width:1050px){.home-episodes{grid-template-columns:repeat(2,minmax(0,1fr))}.home-episodes-list{grid-template-columns:1fr}}
 @media(max-width:600px){.home-episodes{grid-template-columns:1fr 1fr;gap:10px}.home-episode-body{padding:10px}.home-episode-body strong{font-size:13px}.home-episode-body p{display:none}.home-episodes-list{grid-template-columns:1fr}.home-episodes-list .home-episode{grid-template-columns:112px minmax(0,1fr)}.home-episodes-list .home-episode img{min-height:110px}}
+
+
+/* Studio modal and login: light surface form tokens independent of .admin scope */
+.form-surface-light,.auth-panel{background:#fff;color:#242631;color-scheme:light}
+.form-surface-light .input,.form-surface-light .select,.form-surface-light .textarea,
+.auth-panel .input,.auth-panel .select,.auth-panel .textarea{
+ background:#fff;color:#242631;border:1px solid #cbd1dc;border-radius:9px
+}
+.form-surface-light .input:focus,.form-surface-light .select:focus,.form-surface-light .textarea:focus,
+.auth-panel .input:focus,.auth-panel .select:focus,.auth-panel .textarea:focus{
+ outline:2px solid #ba6250;outline-offset:1px;border-color:#a64f3f
+}
+.form-surface-light .input::placeholder,.form-surface-light .textarea::placeholder,
+.auth-panel .input::placeholder{color:#737987}
+.form-surface-light .field label,.auth-panel .field label{color:#555e6d}
+.form-surface-light .pill{background:#fff;color:#353b48;border-color:#cbd1dc}
+.form-surface-light .pill input{accent-color:#b95b49}
+.form-surface-light .pill:has(input:disabled){opacity:.77}
+.form-surface-light .notice,.auth-panel .notice{background:#fff6e8;color:#795029;border-color:#e6c89c}
+.form-surface-light .btn:not(.primary){background:#f5f6f8;color:#303743;border-color:#cfd3de}
+.form-surface-light .btn.primary,.auth-panel .btn.primary{background:#b95b49;color:#fff;border-color:#b95b49}
+.auth-panel{max-width:480px;margin:auto;border:1px solid #e3e6ec;border-radius:14px;padding:28px}
+.auth-panel h1{color:#242631}.auth-panel .muted{color:#626a78}
+.admin .field input[type="checkbox"],.form-surface-light input[type="checkbox"]{accent-color:#b95b49}
+.modal .form-grid{align-items:start}
+.modal .notice{grid-column:1/-1}
+@media(max-width:680px){.auth-panel{padding:18px}.modal{padding:18px;max-height:95vh}}

@@ -18,6 +18,69 @@ async function call(path,method='GET',body){
   cookie=login.setCookie.split(';')[0];csrf=login.data.csrfToken;
   const administrator=await call('/api/v1/studio/bootstrap');
   assert.equal(administrator.code,200);assert.equal(administrator.data.series.length,5);
+
+  const team=await call('/api/v1/studio/teams','POST',{name:'Teste CI Equipe Nova',description:'Equipe criada na API'});
+  assert.equal(team.code,201,'Create team');
+  const teamId=team.data.id;
+  const newPass=randomBytes(24).toString('hex');
+  const member=await call('/api/v1/studio/members','POST',{
+    name:'Integrante QA',email:'qa-team@example.test',password:newPass,teamId,role:'publisher'
+  });
+  assert.equal(member.code,201,'Create member account and membership');
+  assert.equal((await call('/api/v1/studio/members/'+member.data.id,'PUT',{name:'Integrante QA Atualizado',teamId,role:'publisher'})).code,200,'Edit member');
+  assert.equal((await call('/api/v1/studio/teams/'+teamId,'PUT',{name:'Equipe Atualizada',description:'Atualização persistente'})).code,200,'Edit team');
+  const title='CenaLivre Série CI '+randomBytes(4).toString('hex');
+  const series=await call('/api/v1/studio/series','POST',{
+    title,category:'Ficção científica',summary:'Teste de produção',poster:'assets/orbital-poster.svg',
+    banner:'assets/orbital-banner.svg',teamIds:[teamId],featured:false,visibility:'public'
+  });
+  assert.equal(series.code,201,'Create series');
+  const sid=series.data.id;
+  const season=await call('/api/v1/studio/seasons','POST',{seriesId:sid,number:1,title:'Primeira temporada'});
+  assert.equal(season.code,201,'Create season');
+  assert.equal((await call('/api/v1/studio/seasons/'+season.data.id,'PUT',
+    {seriesId:sid,number:1,title:'Temporada Atualizada'})).code,200,'Edit season');
+  const releaseAt=new Date(Date.now()-86400000).toISOString();
+  const episode=await call('/api/v1/studio/episodes','POST',{
+    seasonId:season.data.id,number:1,title:'Episódio piloto',summary:'Teste com YouTube',
+    youtube:'https://youtu.be/dQw4w9WgXcQ',thumbnail:'assets/episode-01.svg',
+    releaseAt,duration:22,status:'published'
+  });
+  assert.equal(episode.code,201,'Create YouTube episode');
+  const episodeId=episode.data.id;
+  assert.equal((await call('/api/v1/studio/episodes/'+episodeId,'PUT',{
+    seasonId:season.data.id,number:1,title:'Episódio publicado',summary:'Edição da descrição',
+    youtube:'https://www.youtube.com/watch?v=dQw4w9WgXcQ',thumbnail:'assets/episode-02.svg',
+    releaseAt,duration:22,status:'published'
+  })).code,200,'Edit episode');
+  const watch=await call('/api/v1/public/episodes/'+episodeId);
+  assert.equal(watch.code,200,'Published video public');
+  assert.equal(watch.data.youtube,'dQw4w9WgXcQ','Stored YouTube ID');
+  const invalid=await call('/api/v1/studio/episodes','POST',{
+    seasonId:season.data.id,number:2,title:'Vídeo inválido',summary:'',
+    youtube:'https://malicious.example/watch?v=dQw4w9WgXcQ',thumbnail:'assets/episode-01.svg',
+    releaseAt,duration:22,status:'published'
+  });
+  assert.equal(invalid.code,400,'Reject foreign video hosts');
+  const future=await call('/api/v1/studio/episodes','POST',{
+    seasonId:season.data.id,number:2,title:'Próxima estreia',summary:'',
+    youtube:'dQw4w9WgXcQ',thumbnail:'assets/episode-01.svg',
+    releaseAt:new Date(Date.now()+86400000).toISOString(),duration:22,status:'scheduled'
+  });
+  assert.equal(future.code,201);
+  const futurePublic=await call('/api/v1/public/episodes/'+future.data.id);
+  assert.equal(futurePublic.code,200);
+  assert.equal(futurePublic.data.youtube,null,'Embargo must hide video ID');
+  assert.equal((await call('/api/v1/studio/settings','PUT',{
+    siteName:'CenaLivre CI',siteDescription:'Testado',contactEmail:'ci@example.test',autoplay:true
+  })).code,200,'Update settings');
+  const settings=await call('/api/v1/studio/settings');
+  assert.equal(settings.code,200);
+  assert.equal(settings.data.siteName,'CenaLivre CI','Persist settings');
+  const refresh=await call('/api/v1/studio/bootstrap');
+  assert(refresh.data.series.some(x=>x.id===sid),'Series persisted');
+  assert(refresh.data.episodes.some(x=>x.id===episodeId),'Episode persisted');
+
   const editorPassword=randomBytes(24).toString('hex');
   const user=await call('/api/v1/studio/users','POST',{email:'integration-editor@example.test',name:'Integration Editor',password:editorPassword});
   assert.equal(user.code,201);
