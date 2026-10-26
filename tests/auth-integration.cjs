@@ -81,6 +81,50 @@ async function call(path,method='GET',body){
   assert(refresh.data.series.some(x=>x.id===sid),'Series persisted');
   assert(refresh.data.episodes.some(x=>x.id===episodeId),'Episode persisted');
 
+  // Persistent media library: policy, upload, tags, image access, reference safety and deletion.
+  const policy=await call('/api/v1/studio/media/settings');
+  assert.equal(policy.code,200);
+  assert.equal((await call('/api/v1/studio/media/settings','PUT',
+    {maxFileMb:5,maxFiles:120,allowedTypes:['png','jpeg']})).code,200,'Set upload policy');
+  const bytes=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScL/nwAAAABJRU5ErkJggg==','base64');
+  async function putImage(p,method,body,headers={}){
+    const response=await fetch('http://localhost:8088'+p,{
+      method,body,headers:{Cookie:cookie,'x-csrf-token':csrf,'Content-Type':'application/octet-stream',...headers}});
+    const data=await response.json().catch(()=>({}));
+    return {status:response.status,data};
+  }
+  const up=await putImage('/api/v1/studio/media/upload','POST',bytes,
+    {'x-media-name':encodeURIComponent('Capa da série.png'),'x-media-kind':'poster',
+     'x-media-tags':encodeURIComponent('ficção, destaque')});
+  assert.equal(up.status,201,'Upload PNG');
+  const mediaId=up.data.id;
+  assert.equal((await call('/api/v1/studio/media')).data.assets[0].kind,'poster');
+  assert.equal((await call('/api/v1/studio/media/'+mediaId,'PATCH',
+    {name:'Capa atualizada',kind:'banner',tags:['destaque','home']})).code,200,'Update media');
+  const fileResponse=await fetch('http://localhost:8088/api/v1/media/files/'+mediaId,{headers:{Cookie:cookie}});
+  assert.equal(fileResponse.status,200,'Read media');
+  assert.equal(fileResponse.headers.get('content-type'),'image/png');
+  const replace=await putImage('/api/v1/studio/media/'+mediaId+'/file','PUT',bytes);
+  assert.equal(replace.status,200,'Replace media');
+  const bad=await putImage('/api/v1/studio/media/upload','POST',Buffer.from('<svg onload=alert(1)>'),
+    {'x-media-name':'evil.svg','x-media-kind':'icon'});
+  assert.equal(bad.status,415,'Reject SVG uploads');
+  assert.equal((await call('/api/v1/studio/series/'+sid,'PUT',{
+    title,category:'Ficção científica',summary:'Testando referências',poster:up.data.url,
+    banner:'assets/orbital-banner.svg',featured:false
+  })).code,200,'Use uploaded poster in series');
+  assert.equal((await call('/api/v1/studio/media/'+mediaId,'DELETE')).code,409,'Prevent deletion of referenced asset');
+  assert.equal((await fetch('http://localhost:8088/api/v1/media/files/'+mediaId)).status,200,
+    'Published series media is public');
+  assert.equal((await call('/api/v1/studio/series/'+sid,'PUT',{
+    title,category:'Ficção científica',summary:'Restoring original art',poster:'assets/orbital-poster.svg',
+    banner:'assets/orbital-banner.svg',featured:false
+  })).code,200);
+  assert.equal((await call('/api/v1/studio/media/'+mediaId,'DELETE')).code,200,'Delete unlinked media');
+  assert.equal((await fetch('http://localhost:8088/api/v1/media/files/'+mediaId)).status,404);
+  assert.equal((await call('/api/v1/studio/media/settings','PUT',
+    {maxFileMb:99,maxFiles:120,allowedTypes:['png']})).code,400,'Reject excessive size setting');
+
   const editorPassword=randomBytes(24).toString('hex');
   const user=await call('/api/v1/studio/users','POST',{email:'integration-editor@example.test',name:'Integration Editor',password:editorPassword});
   assert.equal(user.code,201);
