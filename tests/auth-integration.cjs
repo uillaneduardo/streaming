@@ -307,6 +307,48 @@ async function call(path,method='GET',body){
   assert.equal((await call('/api/v1/studio/media/settings','PUT',
     {maxFileMb:99,maxFiles:120,allowedTypes:['png']})).code,400,'Reject excessive size setting');
 
+
+  // Immutable editorial versions include single-item and bulk changes.
+  const reviewPath=(kind,id)=>'/api/v1/studio/editorial/'+kind+'/'+id;
+  const episodeHistory=await call(reviewPath('episode',episodeId)+'/history');
+  assert.equal(episodeHistory.code,200,'Episode history access');
+  assert(episodeHistory.data.versions.length>=3,'Episode snapshots cover status changes in batch');
+  assert(episodeHistory.data.versions.some(v=>v.operation==='created'),'Episode create snapshot preserved');
+  assert.equal(episodeHistory.data.versions[0].snapshot.title,'Episódio piloto atualizado');
+  const submitReview=await call(reviewPath('episode',episodeId)+'/submit','POST',{message:'Avaliar edição do episódio'});
+  assert.equal(submitReview.code,201,'Submit review of current revision');
+  assert.equal((await call(reviewPath('episode',episodeId)+'/submit','POST',{message:'Repetido'})).code,409,'No duplicated pending review');
+  const decisions=id=>'/api/v1/studio/editorial/reviews/'+id+'/decision';
+  assert.equal((await call(decisions(submitReview.data.id),'POST',{decision:'approve',note:'Aprovado no Studio'})).code,200,
+    'Admin approves reviewed revision');
+  assert.equal((await call(decisions(submitReview.data.id),'POST',{decision:'approve'})).code,409,'One decision per request');
+  let reviewHistory=await call(reviewPath('episode',episodeId)+'/history');
+  assert(reviewHistory.data.reviews.some(x=>x.id===submitReview.data.id&&x.state==='approved'),'Approval recorded');
+  const rejection=await call(reviewPath('episode',episodeId)+'/submit','POST',{message:'Revisar novamente'});
+  assert.equal(rejection.code,201,'Submit next revision');
+  assert.equal((await call(decisions(rejection.data.id),'POST',{decision:'reject',note:'Ajustar créditos'})).code,200,
+    'Rejection leaves content unchanged');
+  reviewHistory=await call(reviewPath('episode',episodeId)+'/history');
+  assert(reviewHistory.data.reviews.some(x=>x.id===rejection.data.id&&x.state==='rejected'),'Rejection recorded');
+  const stale=await call(reviewPath('episode',episodeId)+'/submit','POST',{message:'Publicação pendente'});
+  assert.equal(stale.code,201);
+  assert.equal((await bulk('episodes','set_status',[episodeId],'draft')).code,200,'New version supersedes review');
+  assert.equal((await call(decisions(stale.data.id),'POST',{decision:'approve'})).code,409,'No approval of stale draft');
+  assert.equal((await call(reviewPath('episode',episodeId)+'/history')).data.reviews.find(x=>x.id===stale.data.id).state,
+    'stale','Stale review explicitly recorded');
+  assert.equal((await bulk('episodes','set_status',[episodeId],'published')).code,200,'Restore availability');
+  assert.equal((await call(reviewPath('episode',episodeId)+'/submit','POST',{message:'x'.repeat(1001)})).code,400,
+    'Review notes have size limits');
+  // Managed categories: independent registry, rename updates linked productions atomically.
+  const category=await call('/api/v1/studio/categories','POST',{name:'Teste Editorial'});
+  assert.equal(category.code,201,'Create category');
+  assert.equal((await call('/api/v1/studio/categories','POST',{name:'Teste Editorial'})).code,409,'No duplicate category');
+  assert((await call('/api/v1/studio/categories')).data.categories.some(c=>c.id===category.data.id),'Listed category');
+  assert.equal((await call('/api/v1/studio/categories/'+category.data.id,'PUT',{name:'Teste Editado'})).code,200,
+    'Rename category');
+  assert.equal((await call('/api/v1/studio/categories/'+category.data.id,'DELETE')).code,200,
+    'Delete unused category');
+
   const banner=await call('/api/v1/studio/banners','POST',{
     title:'Banner do catálogo',subtitle:'Campanha de exemplo',image:'assets/orbital-banner.svg',
     mobileImage:'',target:sid,order:3,startAt:null,endAt:null,active:true
@@ -405,6 +447,18 @@ async function call(path,method='GET',body){
     banner:'assets/orbital-banner.svg',teamIds:[teamId],visibility:'draft'
   });
   assert.equal(created.code,201,'Create removable series');
+
+  const categoryInUse=await call('/api/v1/studio/categories','POST',{name:'Teste'});
+  assert.equal(categoryInUse.code,201,'Register legacy-compatible test category');
+  assert.equal((await call('/api/v1/studio/categories/'+categoryInUse.data.id,'DELETE')).code,409,
+    'Cannot delete category used by a series');
+  assert.equal((await call('/api/v1/studio/categories/'+categoryInUse.data.id,'PUT',
+    {name:'Teste Rebatizado'})).code,200,'Renaming category updates series');
+  const changedCategory=(await call('/api/v1/studio/bootstrap')).data.series.find(x=>x.id===created.data.id);
+  assert.equal(changedCategory.category,'Teste Rebatizado','Category rename propagated');
+  const seriesVersions=(await call(reviewPath('series',created.data.id)+'/history')).data.versions;
+  assert(seriesVersions.some(v=>v.snapshot.category==='Teste'),'Previous category preserved in version history');
+
   const createdSeason=await call('/api/v1/studio/seasons','POST',{seriesId:created.data.id,number:1,title:'Temporada teste'});
   assert.equal(createdSeason.code,201,'Create removable season');
   const createdEpisode=await call('/api/v1/studio/episodes','POST',{
@@ -453,6 +507,9 @@ async function call(path,method='GET',body){
   assert.equal((await call('/api/v1/studio/series/s1','PUT',form)).code,200);
   const editorCsrf=csrf;csrf='';
   assert.equal((await call('/api/v1/studio/episodes/e1','DELETE')).code,403,'CSRF required for deletes');
+  assert.equal((await call('/api/v1/studio/editorial/episode/e1/submit','POST',{message:'teste'})).code,403,
+    'Editorial review submission requires CSRF');
+
   assert.equal((await call('/api/v1/studio/editorial/bulk','POST',{
     resource:'sections',action:'delete',ids:['hs1']
   })).code,403,'CSRF required for CMS changes');
@@ -464,6 +521,13 @@ async function call(path,method='GET',body){
   csrf=editorCsrf;
   assert.equal((await call('/api/v1/studio/series/s3','PUT',form)).code,403);
   assert.equal((await call('/api/v1/studio/series/s3','DELETE')).code,403,"Cannot delete another team's series");
+  assert.equal((await call('/api/v1/studio/editorial/series/s3/history')).code,403,
+    'Editor cannot access cross-team editorial versions');
+  assert.equal((await call('/api/v1/studio/editorial/series/s3/submit','POST',{message:'x'})).code,403,
+    'Editor cannot submit cross-team content for review');
+  assert.equal((await call('/api/v1/studio/categories','POST',{name:'Não autorizado'})).code,403,
+    'Team editor cannot create global categories');
+
   assert.equal((await call('/api/v1/studio/editorial/bulk','POST',{
     resource:'sections',action:'set_active',ids:['hs1'],active:false
   })).code,403,'Non-admin cannot hide CMS sections');
