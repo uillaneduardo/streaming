@@ -3,11 +3,42 @@
 const img=(seed,w=900,h=550)=>`assets/episode-${String((Array.from(String(seed)).reduce((n,c)=>n+c.charCodeAt(0),0)%14)+1).padStart(2,'0')}.svg`;
 const artwork={orbital:{poster:'assets/orbital-poster.svg',banner:'assets/orbital-banner.svg'},atlas:{poster:'assets/atlas-poster.svg',banner:'assets/atlas-banner.svg'},mares:{poster:'assets/mares-poster.svg',banner:'assets/mares-banner.svg'},lendas:{poster:'assets/lendas-poster.svg',banner:'assets/lendas-banner.svg'},cidade:{poster:'assets/cidade-poster.svg',banner:'assets/cidade-banner.svg'}};
 const now=()=>new Date().toISOString();const past=d=>new Date(Date.now()-d*864e5).toISOString().slice(0,16);const future=d=>new Date(Date.now()+d*864e5).toISOString().slice(0,16);const initial=()=>({teams:[{id:'t1',name:'Coletivo Aurora',description:'Narrativas e documentários'},{id:'t2',name:'Núcleo Prisma',description:'Tecnologia e ciência'},{id:'t3',name:'Maré Criativa',description:'Natureza e aventura'}],members:[{id:'m1',name:'Marina Costa',email:'marina@exemplo.test',teamId:'t1',role:'Gestora'},{id:'m2',name:'Caio Almeida',email:'caio@exemplo.test',teamId:'t1',role:'Editor'},{id:'m3',name:'Ana Ribeiro',email:'ana@exemplo.test',teamId:'t2',role:'Gestora'},{id:'m4',name:'Bruno Lima',email:'bruno@exemplo.test',teamId:'t3',role:'Publicador'}],series:[{id:'s1',title:'Além da Órbita',slug:'alem-da-orbita',category:'Ficção científica',summary:'Em uma missão de exploração, uma tripulação descobre sinais que podem mudar tudo o que sabemos sobre o universo.',teamIds:['t1','t2'],poster:artwork.orbital.poster,banner:artwork.orbital.banner,featured:true},{id:'s2',title:'Código Aberto',slug:'codigo-aberto',category:'Tecnologia',summary:'Histórias de pessoas que transformam ideias em tecnologias capazes de alterar nosso cotidiano.',teamIds:['t2'],poster:artwork.atlas.poster,banner:artwork.atlas.banner,featured:false},{id:'s3',title:'Marés do Brasil',slug:'mares-do-brasil',category:'Documentário',summary:'Uma jornada por comunidades costeiras, paisagens e histórias que vivem ao ritmo do oceano.',teamIds:['t3'],poster:artwork.mares.poster,banner:artwork.mares.banner,featured:false},{id:'s4',title:'Lendas de Ontem',slug:'lendas-de-ontem',category:'Suspense',summary:'Contos populares reinventados em narrativas contemporâneas de mistério.',teamIds:['t1'],poster:artwork.lendas.poster,banner:artwork.lendas.banner,featured:false},{id:'s5',title:'Cidade Invisível',slug:'cidade-invisivel',category:'Drama',summary:'Retratos íntimos de histórias e encontros que acontecem enquanto a cidade dorme.',teamIds:['t1'],poster:artwork.cidade.poster,banner:artwork.cidade.banner,featured:false}],seasons:[{id:'se1',seriesId:'s1',number:1,title:'Primeiros sinais'},{id:'se2',seriesId:'s1',number:2,title:'Além do silêncio'},{id:'se3',seriesId:'s2',number:1,title:'As ideias'},{id:'se4',seriesId:'s3',number:1,title:'Costa viva'},{id:'se5',seriesId:'s4',number:1,title:'Mitos urbanos'},{id:'se6',seriesId:'s5',number:1,title:'Noite adentro'}],episodes:[{id:'e1',seasonId:'se1',number:1,title:'O chamado',summary:'A primeira mensagem chega à estação orbital.',youtube:'',thumbnail:artwork.orbital.banner,releaseAt:past(12),endAt:'',status:'published',duration:24},{id:'e2',seasonId:'se1',number:2,title:'O sinal',summary:'Uma anomalia muda o rumo da expedição.',youtube:'',thumbnail:img('starscape-orbit',1100,650),releaseAt:past(5),endAt:'',status:'published',duration:28},{id:'e3',seasonId:'se1',number:3,title:'Primeiro contato',summary:'A tripulação tenta decifrar uma origem desconhecida.',youtube:'',thumbnail:img('nebula-discovery',1100,650),releaseAt:future(3),endAt:'',status:'scheduled',duration:31},{id:'e4',seasonId:'se1',number:4,title:'Horizonte de eventos',summary:'Uma escolha pode mudar para sempre a missão.',youtube:'',thumbnail:img('cosmic-event',1100,650),releaseAt:future(10),endAt:'',status:'scheduled',duration:27},{id:'e5',seasonId:'se2',number:1,title:'O retorno',summary:'Novos caminhos se abrem.',youtube:'',thumbnail:img('orbit-return',1100,650),releaseAt:future(18),endAt:'',status:'scheduled',duration:33},{id:'e6',seasonId:'se3',number:1,title:'Quem escreve o futuro?',summary:'Conversas sobre criação, pesquisa e inovação.',youtube:'',thumbnail:artwork.atlas.banner,releaseAt:past(8),endAt:'',status:'published',duration:19},{id:'e7',seasonId:'se3',number:2,title:'Os bastidores da internet',summary:'Uma viagem pelas redes que conectam pessoas.',youtube:'',thumbnail:img('network-tech',1100,650),releaseAt:future(6),endAt:'',status:'scheduled',duration:22},{id:'e8',seasonId:'se4',number:1,title:'Onde a maré começa',summary:'Pessoas e paisagens que contam histórias do litoral.',youtube:'',thumbnail:artwork.mares.banner,releaseAt:past(16),endAt:'',status:'published',duration:29},{id:'e9',seasonId:'se5',number:1,title:'O último visitante',summary:'Uma história que ninguém conseguiu explicar.',youtube:'',thumbnail:artwork.lendas.banner,releaseAt:past(3),endAt:'',status:'published',duration:18},{id:'e10',seasonId:'se6',number:1,title:'Depois das luzes',summary:'A cidade revela sua outra face.',youtube:'',thumbnail:artwork.cidade.banner,releaseAt:future(9),endAt:'',status:'scheduled',duration:26}],banners:[{id:'b1',title:'Nova temporada: Além da Órbita',subtitle:'Explore novos mundos na nossa série em destaque.',image:artwork.orbital.banner,mobileImage:'',target:'s1',startAt:past(5),endAt:'',active:true,order:1},{id:'b2',title:'Marés do Brasil',subtitle:'Histórias reais à beira do oceano.',image:artwork.mares.banner,mobileImage:'',target:'s3',startAt:future(4),endAt:'',active:true,order:2}],homeSections:[{id:'hs1',title:'Em destaque',kind:'featured',active:true},{id:'hs2',title:'Últimos lançamentos',kind:'latest',active:true},{id:'hs3',title:'Próximas estreias',kind:'upcoming',active:true},{id:'hs4',title:'Todas as séries',kind:'all',active:true}],media:[],preferences:{siteName:'CenaLivre',siteDescription:'Histórias independentes, para todos.',autoplay:false},saved:[]});
-let db;try{db=JSON.parse(localStorage.getItem('cenalivre-mvp-v2'))||initial()}catch{db=initial()}const defaults=initial();for(const old of db.series||[]){const fresh=defaults.series.find(x=>x.id===old.id);if(fresh){if((old.poster||'').includes('unsplash.com'))old.poster=fresh.poster;if((old.banner||'').includes('unsplash.com'))old.banner=fresh.banner;}}for(const old of db.episodes||[]){const fresh=defaults.episodes.find(x=>x.id===old.id);if(fresh&&/(unsplash.com|picsum.photos)/.test(old.thumbnail||''))old.thumbnail=fresh.thumbnail;}for(const old of db.banners||[]){const fresh=defaults.banners.find(x=>x.id===old.id);if(fresh&&/(unsplash.com|picsum.photos)/.test(old.image||''))old.image=fresh.image;}const save=()=>{try{localStorage.setItem('cenalivre-mvp-v2',JSON.stringify(db))}catch{toast('Armazenamento local cheio. Use imagens por URL.')}};
+// Demonstration data is available exclusively when this file is opened offline.
+// The hosted portal and Studio must never restore fixtures from localStorage.
+const hosted=location.protocol==='http:'||location.protocol==='https:';
+const emptyState=()=>({teams:[],members:[],series:[],seasons:[],episodes:[],
+ banners:[],homeSections:[],media:[],preferences:{siteName:'CenaLivre',
+ siteDescription:'',autoplay:false},saved:[]});
+let db;
+if(hosted){
+ db=emptyState();
+}else{
+ try{db=JSON.parse(localStorage.getItem('cenalivre-mvp-v2'))||initial()}catch{db=initial()}
+ const defaults=initial();
+ for(const old of db.series||[]){
+  const fresh=defaults.series.find(x=>x.id===old.id);
+  if(fresh){
+   if((old.poster||'').includes('unsplash.com'))old.poster=fresh.poster;
+   if((old.banner||'').includes('unsplash.com'))old.banner=fresh.banner;
+  }
+ }
+ for(const old of db.episodes||[]){
+  const fresh=defaults.episodes.find(x=>x.id===old.id);
+  if(fresh&&/(unsplash.com|picsum.photos)/.test(old.thumbnail||''))old.thumbnail=fresh.thumbnail;
+ }
+ for(const old of db.banners||[]){
+  const fresh=defaults.banners.find(x=>x.id===old.id);
+  if(fresh&&/(unsplash.com|picsum.photos)/.test(old.image||''))old.image=fresh.image;
+ }
+}
+const save=()=>{
+ if(hosted)return;
+ try{localStorage.setItem('cenalivre-mvp-v2',JSON.stringify(db))}
+ catch{toast('Armazenamento local cheio. Use imagens por URL.')}
+};
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));const slug=s=>String(s).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');const id=p=>p+Math.random().toString(36).slice(2,9);const date=s=>s?new Date(s).toLocaleDateString('pt-BR',{day:'2-digit',month:'short',year:'numeric'}):'Sem data';const dt=s=>s?new Date(s).toLocaleString('pt-BR',{dateStyle:'short',timeStyle:'short'}):'Sem data';const by=(col,id)=>db[col].find(x=>x.id===id);const seasons=sid=>db.seasons.filter(x=>x.seriesId===sid).sort((a,b)=>a.number-b.number);const eps=seid=>db.episodes.filter(x=>x.seasonId===seid).sort((a,b)=>a.number-b.number);const seriesForEpisode=e=>by('series',by('seasons',e.seasonId)?.seriesId);const state=e=>{if(e.status==='draft')return 'Rascunho';if(e.status==='suspended')return 'Suspenso';if(e.releaseAt&&new Date(e.releaseAt)>new Date())return 'Em breve';if(e.endAt&&new Date(e.endAt)<=new Date())return 'Encerrado';return 'Disponível'};const playable=e=>state(e)==='Disponível';const epOrder=sid=>seasons(sid).flatMap(se=>eps(se.id));const heroImg=u=>`url("${String(u||'').replace(/["\\]/g,'')}")`;const ytId=u=>{const s=String(u||'').trim();if(/^[A-Za-z0-9_-]{11}$/.test(s))return s;try{const x=new URL(s);if(!['youtube.com','www.youtube.com','m.youtube.com','youtu.be','www.youtube-nocookie.com'].includes(x.hostname))return'';if(x.hostname==='youtu.be')return x.pathname.slice(1).split('/')[0];if(x.pathname.startsWith('/embed/')||x.pathname.startsWith('/shorts/'))return x.pathname.split('/')[2];return x.searchParams.get('v')||''}catch{return''}};
 
-const hosted=location.protocol==='http:'||location.protocol==='https:';
-let publicData=hosted?initial():db;
+let publicData=hosted?emptyState():db;
 let publicLoadState=hosted?'loading':'ready';
 let publicLoadError='';
 let frontendVersion='checking';
@@ -23,11 +54,11 @@ async function apiRequest(url,options={}){
 }
 async function fetchStudioData(){
   const payload=await apiRequest('/api/v1/studio/bootstrap');
-  let settings=initial().preferences;
+  let settings=emptyState().preferences;
   if(studioUser?.isAdmin){
     try{settings=await apiRequest('/api/v1/studio/settings')}catch(error){console.warn('Configurações indisponíveis',error)}
   }
-  studioData={...initial(),...payload,preferences:settings,saved:[]};
+  studioData={...emptyState(),...payload,preferences:settings,saved:[]};
   await fetchMedia();
   render();
 }
