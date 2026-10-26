@@ -158,3 +158,42 @@
 .player-minimal-bar{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:12px 4px 0}
 .player-minimal-bar #player-hint{line-height:1.5}
 @media(max-width:620px){.player-minimal-bar{gap:8px}.player-minimal-bar #player-hint{font-size:11px}.app-version{font-size:10px}}
+
+/* Unified editorial catalogue management */
+.catalog-manager{padding:18px}
+.catalog-toolbar{display:flex;align-items:end;flex-wrap:wrap;gap:12px;margin-bottom:17px}
+.catalog-toolbar label{display:flex;flex-direction:column;gap:6px;min-width:158px}
+.catalog-toolbar label>span{font-size:11px;font-weight:650;color:#596172}
+.catalog-toolbar .catalog-search{flex:1;min-width:220px;max-width:420px}
+.catalog-toolbar .input,.catalog-toolbar .select{height:41px;background:#fff;color:#242631;border:1px solid #d3d8e1;min-width:0}
+.catalog-toolbar .catalog-clear{min-height:40px;align-self:end;background:#f6f7f9;color:#3a4250;border:1px solid #d6dbe3}
+.catalog-results{font-size:12px;color:#69717d;margin:0 0 9px}
+.catalog-table-scroll{width:100%;overflow-x:auto}
+.catalog-table{width:100%;min-width:650px}
+.catalog-table th:last-child,.catalog-table td:last-child{text-align:right}
+.catalog-table td{vertical-align:middle}
+.catalog-title{display:flex;align-items:center;gap:10px;min-width:160px}
+.catalog-title img{flex:none;width:45px;height:55px;object-fit:cover;background:#eceef2;border-radius:7px}
+.catalog-title>div{min-width:0}
+.catalog-title strong{display:block;overflow-wrap:anywhere}
+.catalog-wrap{max-width:230px;overflow-wrap:anywhere}
+.catalog-count{font-size:11px;white-space:nowrap}
+.catalog-number{display:inline-grid;place-items:center;background:#eef0f3;border-radius:7px;min-width:30px;height:30px;font-weight:700}
+.catalog-row-actions{min-width:138px;white-space:nowrap}
+.catalog-row-actions .btn{margin:2px}
+.catalog-delete{color:#9f3539!important;background:#fff5f5!important;border-color:#f0cbcc!important}
+.catalog-delete:hover,.catalog-delete:focus-visible{background:#ffe5e6!important}
+.catalog-empty{text-align:center;padding:38px 10px;color:#3b4351}
+.catalog-empty strong{font-size:14px}
+.catalog-empty p{margin:9px 0 16px;color:#77808f}
+.catalog-delete-dialog p{line-height:1.6;margin:12px 0 16px}
+.catalog-delete-warning{border:1px solid #edd3a2;background:#fff6e7;padding:12px;border-radius:9px;color:#856131}
+.catalog-confirm-danger{background:#b9393d!important;border-color:#b9393d!important}
+.catalog-storage-hint{font-size:12px;color:#6f7580;margin:12px 0}
+@media(max-width:750px){
+ .catalog-manager{padding:12px}
+ .catalog-toolbar{gap:9px}
+ .catalog-toolbar label{flex:1;min-width:145px}
+ .catalog-toolbar .catalog-search{min-width:100%;max-width:none}
+ .catalog-toolbar .catalog-clear{flex:1}
+}
