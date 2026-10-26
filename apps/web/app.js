@@ -429,8 +429,10 @@ function artworkImage(src,fallback,alt,className){
  const first=String(src||'').trim(),backup=String(fallback||'').trim();
  const candidates=[first,backup].filter((v,i,arr)=>v&&arr.indexOf(v)===i);
  return candidates.length?
-  '<img class="'+className+'" src="'+esc(candidates[0])+'" alt="'+esc(alt)+'" loading="lazy" '+
-  (candidates[1]?'data-artwork-fallback="'+esc(candidates[1])+'" ':'')+'data-artwork-kind="'+esc(className)+'">':
+  '<img class="'+className+'" src="'+esc(candidates[0])+'" alt="'+esc(alt)+'" '+(className==='hero-artwork-img'?'':'loading="lazy" ')+
+  (candidates[1]?'data-artwork-fallback="'+esc(candidates[1])+'" ':'')+
+  (className==='hero-artwork-img'?'loading="eager" fetchpriority="high" ':'')+
+  'data-artwork-kind="'+esc(className)+'">':
   '';
 }
 function poster(s){return `<a href="#/serie/${esc(s.id)}" class="poster-card"><div class="poster-img">
@@ -569,7 +571,7 @@ const sideItems=[['dashboard','layout-dashboard','Visão geral'],['series','clap
 function studioFrame(content){return `<div class="admin">${side()}<div class="admin-main"><div class="admin-top"><button class="btn small mobile-menu" data-action="toggle-side">${studioIcon('menu')}</button><strong style="font-size:13px">Studio</strong><div style="flex:1"></div><button class="btn small" data-action="route" data-path="/">Ver portal ${studioIcon('external-link')}</button></div><main class="admin-content">${content}</main></div></div>`}
 function pageHead(title,subtitle,actions=''){return `<div class="pagehead"><div><h1>${title}</h1>${subtitle?'<p>'+subtitle+'</p>':''}</div><div class="row">${actions}</div></div>`}
 function stat(n,label){return `<div class="panel"><div class="stat-label">${label}</div><div class="stat-value">${n}</div></div>`}
-function dashboard(){const coming=db.episodes.filter(x=>state(x)==='Em breve').sort((a,b)=>new Date(a.releaseAt)-new Date(b.releaseAt));return pageHead('Visão geral','Acompanhe o catálogo e os próximos lançamentos.',`<button class="btn primary" data-action="create-series">${studioIcon('plus')} Nova série</button>`)+`<div class="stat-grid">${stat(db.series.length,'Séries cadastradas')}${stat(db.episodes.length,'Episódios')}${stat(coming.length,'Estreias programadas')}${stat(db.teams.length,'Equipes')}</div><div class="two-column"><section class="panel"><h2>Próximas estreias</h2>${coming.length?coming.slice(0,6).map(x=>`<div class="schedule-line"><div class="smallcaps" style="color:#b25d4d">${dt(x.releaseAt)}</div><strong>${esc(seriesForEpisode(x)?.title)} · ${esc(x.title)}</strong><div class="muted tiny">T${by('seasons',x.seasonId)?.number}:E${x.number}</div></div>`).join(''):'<p class="muted">Nenhuma estreia agendada.</p>'}<button class="btn small" data-action="route" data-path="/studio/schedule">Abrir calendário</button></section><section class="panel"><h2>Produções em destaque</h2>${db.series.slice(0,4).map(s=>`<div class="item-card"><img src="${esc(s.banner)}" alt=""><div class="item-info"><h3>${esc(s.title)}</h3><p>${esc(s.category)} · ${epOrder(s.id).length} episódio(s)</p></div><button class="btn small" data-action="series-artwork" data-id="${s.id}">Imagens</button><button class="btn small" data-action="edit-series" data-id="${s.id}">Editar</button></div>`).join('')}</section></div>`}
+function dashboard(){const coming=db.episodes.filter(x=>state(x)==='Em breve').sort((a,b)=>new Date(a.releaseAt)-new Date(b.releaseAt));return pageHead('Visão geral','Acompanhe o catálogo e os próximos lançamentos.',`<button class="btn primary" data-action="create-series">${studioIcon('plus')} Nova série</button>`)+`<div class="stat-grid">${stat(db.series.length,'Séries cadastradas')}${stat(db.episodes.length,'Episódios')}${stat(coming.length,'Estreias programadas')}${stat(db.teams.length,'Equipes')}</div><div class="two-column"><section class="panel"><h2>Próximas estreias</h2>${coming.length?coming.slice(0,6).map(x=>`<div class="schedule-line"><div class="smallcaps" style="color:#b25d4d">${dt(x.releaseAt)}</div><strong>${esc(seriesForEpisode(x)?.title)} · ${esc(x.title)}</strong><div class="muted tiny">T${by('seasons',x.seasonId)?.number}:E${x.number}</div></div>`).join(''):'<p class="muted">Nenhuma estreia agendada.</p>'}<button class="btn small" data-action="route" data-path="/studio/schedule">Abrir calendário</button></section><section class="panel"><h2>Produções em destaque</h2>${db.series.slice(0,4).map(s=>`<div class="item-card">${artworkImage(s.banner,s.poster,'Banner de '+s.title,'dashboard-artwork')}<div class="item-info"><h3>${esc(s.title)}</h3><p>${esc(s.category)} · ${epOrder(s.id).length} episódio(s)</p></div><button class="btn small" data-action="series-artwork" data-id="${s.id}">Imagens</button><button class="btn small" data-action="edit-series" data-id="${s.id}">Editar</button></div>`).join('')}</section></div>`}
 
 const catalogFilters={
  series:{query:'',category:'all',visibility:'all'},
@@ -688,7 +690,7 @@ function catalogRows(type){
   const epCount=db.episodes.filter(e=>by('seasons',e.seasonId)?.seriesId===s.id).length;
   const visibility=s.visibility||'draft';
   const badge=visibility==='public'?'Pública':visibility==='suspended'?'Suspensa':'Rascunho';
-  return '<tr><td>'+catalogCheckbox(type,s.id,s.title)+'</td><td><div class="catalog-title"><img src="'+esc(s.poster||'')+'" alt="" loading="lazy">'+
+  return '<tr><td>'+catalogCheckbox(type,s.id,s.title)+'</td><td><div class="catalog-title">'+artworkImage(s.poster,s.banner,'Pôster de '+s.title,'catalog-artwork')+
    '<div><strong>'+esc(s.title)+'</strong><div class="muted tiny">'+esc(s.category)+'</div></div></div></td>'+
    '<td><span class="badge '+(visibility==='public'?'green':visibility==='suspended'?'orange':'blue')+'">'+badge+'</span></td>'+
    '<td class="catalog-wrap">'+esc((s.teamIds||[]).map(id=>by('teams',id)?.name).filter(Boolean).join(', ')||'Sem equipe')+'</td>'+
