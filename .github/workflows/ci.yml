@@ -98,6 +98,7 @@ jobs:
           export BOOTSTRAP_PASSWORD="$CI_LOGIN_PASSWORD"
           docker compose exec -T -e BOOTSTRAP_EMAIL -e BOOTSTRAP_NAME -e BOOTSTRAP_PASSWORD api node dist/bootstrap.js
           node tests/auth-integration.cjs
+          node tests/browser-invitations.cjs
           unset BOOTSTRAP_EMAIL BOOTSTRAP_NAME BOOTSTRAP_PASSWORD CI_LOGIN_PASSWORD
       - name: Verify deleted or edited demo content NEVER reappears after migration
         run: |
