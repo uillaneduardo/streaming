@@ -124,7 +124,7 @@ async function saveRemoteEntity(form){
     await fetchStudioData();
     if(type==='series'||type==='seasons'||type==='episodes'||type==='banners')await refreshPublicCatalog();
     document.getElementById('modal-root').innerHTML='';
-    render();toast('Alterações salvas no servidor.');
+    render();toast('Alterações salvas.');
   }catch(error){toast(error.message||'Não foi possível salvar.');const btn=form.querySelector('[type="submit"]');if(btn)btn.disabled=false;}
 }
 async function saveRemoteSettings(form){
@@ -292,7 +292,7 @@ async function uploadInlineMedia(input){
   assignMediaToField(manual?.name||'',result.url);
   if(status)status.textContent='✓ Imagem salva no homelab. '+file.name;
   if(progress)progress.value=100;
-  toast('Imagem enviada e vinculada ao formulário.');
+  toast('Imagem enviada e selecionada.');
  }catch(error){
   if(thumb)thumb.innerHTML=oldPreview||'';
   if(manual)manual.value=original;
@@ -337,7 +337,7 @@ async function uploadFromPicker(file){
    assignMediaToField(mediaPickerField,result.url);
    closeMediaPicker();
   }else{updateMediaPicker()}
-  toast('Imagem enviada e disponível na Biblioteca.');
+  toast('Imagem adicionada à Biblioteca.');
  }catch(error){if(msg)msg.textContent=error.message;toast(error.message)}
 }
 async function submitMediaUpload(form){
@@ -504,8 +504,8 @@ function watchPage(eid){
  <div class="episode-list">${seq.map(epPublicRow).join('')}</div></div>`;
 }
 function missing(){return `<div class="container"><h1>Conteúdo não encontrado</h1><a class="btn" href="#/">Voltar ao início</a></div>`}
-const sideItems=[['dashboard','▦','Visão geral'],['series','▤','Séries'],['seasons','▥','Temporadas'],['episodes','▷','Episódios'],['media','▧','Biblioteca de mídia'],['schedule','◷','Calendário editorial'],['homepage','◈','CMS da página inicial'],['teams','♧','Equipes e permissões'],['settings','⚙','Configurações']];function side(){return `<aside class="sidebar" id="sidebar"><div class="row between"><div class="brand">CENA<em>LIVRE</em><div class="muted tiny" style="letter-spacing:0;font-weight:500">Studio de produção</div></div><button class="btn small mobile-side-close" data-action="toggle-side">✕</button></div><div class="sidebar-label">Operação editorial</div>${sideItems.map(([p,ic,t])=>`<button data-action="route" data-path="/studio/${p}" class="side-link ${route.parts[1]===p?'active':''}"><span style="font-size:17px;width:21px">${ic}</span>${t}</button>`).join('')}<div class="sidebar-label">Plataforma</div><button class="side-link" data-action="route" data-path="/">↗ &nbsp; Visitar portal</button><button class="side-link" data-action="${hosted?'logout':'reset'}">${hosted?'⇥ &nbsp; Sair do Studio':'↻ &nbsp; Restaurar dados de exemplo'}</button><div class="notice" style="margin:25px 7px 5px;font-size:11px">${hosted?'Painel conectado ao servidor. Os dados salvos são persistentes.':'Demonstração local, sem autenticação.'}</div></aside>`}
-function studioFrame(content){return `<div class="admin">${side()}<div class="admin-main"><div class="admin-top"><button class="btn small mobile-menu" data-action="toggle-side">☰</button><strong style="font-size:13px">Studio</strong><span class="app-version" title="Versão instalada do frontend">v${esc(frontendVersion)}</span><div style="flex:1"></div><span class="muted tiny">${hosted?'● Sessão autenticada':'● Ambiente demonstrativo'}</span><button class="btn small" data-action="route" data-path="/">Ver portal ↗</button></div><main class="admin-content">${content}</main></div></div>`}
+const sideItems=[['dashboard','▦','Visão geral'],['series','▤','Séries'],['seasons','▥','Temporadas'],['episodes','▷','Episódios'],['media','▧','Biblioteca de mídia'],['schedule','◷','Calendário editorial'],['homepage','◈','CMS da página inicial'],['teams','♧','Equipes e permissões'],['settings','⚙','Configurações']];function side(){return `<aside class="sidebar" id="sidebar"><div class="row between"><div class="brand">CENA<em>LIVRE</em><div class="muted tiny" style="letter-spacing:0;font-weight:500">Studio de produção</div></div><button class="btn small mobile-side-close" data-action="toggle-side">✕</button></div><div class="sidebar-label">Operação editorial</div>${sideItems.map(([p,ic,t])=>`<button data-action="route" data-path="/studio/${p}" class="side-link ${route.parts[1]===p?'active':''}"><span style="font-size:17px;width:21px">${ic}</span>${t}</button>`).join('')}<div class="sidebar-label">Plataforma</div><button class="side-link" data-action="route" data-path="/">↗ &nbsp; Visitar portal</button><button class="side-link" data-action="${hosted?'logout':'reset'}">${hosted?'⇥ &nbsp; Sair do Studio':'↻ &nbsp; Restaurar dados de exemplo'}</button></aside>`}
+function studioFrame(content){return `<div class="admin">${side()}<div class="admin-main"><div class="admin-top"><button class="btn small mobile-menu" data-action="toggle-side">☰</button><strong style="font-size:13px">Studio</strong><div style="flex:1"></div><button class="btn small" data-action="route" data-path="/">Ver portal ↗</button></div><main class="admin-content">${content}</main></div></div>`}
 function pageHead(title,subtitle,actions=''){return `<div class="pagehead"><div><h1>${title}</h1><p>${subtitle}</p></div><div class="row">${actions}</div></div>`}
 function stat(n,label){return `<div class="panel"><div class="stat-label">${label}</div><div class="stat-value">${n}</div></div>`}
 function dashboard(){const coming=db.episodes.filter(x=>state(x)==='Em breve').sort((a,b)=>new Date(a.releaseAt)-new Date(b.releaseAt));return pageHead('Visão geral','Acompanhe o catálogo e os próximos lançamentos.',`<button class="btn primary" data-action="create-series">+ Nova série</button>`)+`<div class="stat-grid">${stat(db.series.length,'Séries cadastradas')}${stat(db.episodes.length,'Episódios')}${stat(coming.length,'Estreias programadas')}${stat(db.teams.length,'Equipes')}</div><div class="two-column"><section class="panel"><h2>Próximas estreias</h2>${coming.length?coming.slice(0,6).map(x=>`<div class="schedule-line"><div class="smallcaps" style="color:#b25d4d">${dt(x.releaseAt)}</div><strong>${esc(seriesForEpisode(x)?.title)} · ${esc(x.title)}</strong><div class="muted tiny">T${by('seasons',x.seasonId)?.number}:E${x.number}</div></div>`).join(''):'<p class="muted">Nenhuma estreia agendada.</p>'}<button class="btn small" data-action="route" data-path="/studio/schedule">Abrir calendário</button></section><section class="panel"><h2>Produções em destaque</h2>${db.series.slice(0,4).map(s=>`<div class="item-card"><img src="${esc(s.banner)}" alt=""><div class="item-info"><h3>${esc(s.title)}</h3><p>${esc(s.category)} · ${epOrder(s.id).length} episódio(s)</p></div><button class="btn small" data-action="edit-series" data-id="${s.id}">Editar</button></div>`).join('')}</section></div>`}
@@ -643,7 +643,7 @@ function seasonsAdmin(){return catalogPage('seasons')}
 function episodesAdmin(){return catalogPage('episodes')}
 function mediaAdmin(){
  const allTags=[...new Set(mediaData.assets.flatMap(a=>a.tags))].sort();
- return pageHead('Biblioteca de mídia','Upload, organização, tags e seleção para séries, episódios e banners.',
+ return pageHead('Biblioteca de mídia','Organize, encontre e reutilize suas imagens.',
  '<button class="btn primary" data-action="media-upload-open">+ Enviar imagem</button>')+
  '<div class="panel"><div class="row between"><div><h2>Arquivos armazenados</h2><p class="muted tiny">Imagens armazenadas no homelab e organizadas por categorias e tags.</p></div>'+
  '<span class="badge" id="media-library-count">'+mediaData.assets.length+' arquivo(s)</span></div>'+
@@ -654,9 +654,9 @@ function mediaAdmin(){
  '<option value="'+esc(t)+'" '+(mediaTagFilter===t?'selected':'')+'>'+esc(t)+'</option>').join('')+'</select></div>'+
  '<div class="media-grid" id="media-library-grid">'+(mediaData.assets.length?mediaData.assets.map(a=>mediaCard(a)).join(''):
  '<div class="empty">Nenhuma mídia enviada. Clique em “Enviar imagem” para começar.</div>')+'</div></div>'+
- '<div class="notice">Formatos permitidos: '+esc(mediaData.settings.allowedTypes.join(', ').toUpperCase())+
+ '<div class="catalog-storage-hint">Formatos permitidos: '+esc(mediaData.settings.allowedTypes.join(', ').toUpperCase())+
  '. Tamanho máximo: '+mediaData.settings.maxFileMb+' MB por arquivo. Até '+mediaData.settings.maxFiles+
- ' imagens armazenadas. Alterações desses limites em Configurações → Uploads.</div>';
+ ' imagens. Ajuste os limites em Configurações → Uploads.</div>';
 }
 function scheduleAdmin(){const es=[...db.episodes].filter(e=>e.releaseAt).sort((a,b)=>new Date(a.releaseAt)-new Date(b.releaseAt));return pageHead('Calendário editorial','Controle as janelas de publicação de cada episódio.')+`<div class="panel"><h2>Linha do tempo de lançamentos</h2>${es.map(e=>`<div class="schedule-line"><div class="smallcaps">${dt(e.releaseAt)}</div><div class="row between"><div><strong>${esc(seriesForEpisode(e)?.title)} — ${esc(e.title)}</strong><div class="tiny muted">${state(e)}${e.endAt?' · expira '+dt(e.endAt):' · sem expiração'}</div></div><button class="btn small" data-action="edit-episode" data-id="${e.id}">Editar datas</button></div></div>`).join('')}</div>`}
 function homepageAdmin(){return pageHead('CMS da página inicial','Gerencie a vitrine, campanhas e ordem das seções.',`<button class="btn primary" data-action="create-banner">+ Novo banner</button>`)+`<div class="panel"><h2>Banners e campanhas</h2><div class="stack">${db.banners.map(b=>`<div class="item-card"><img class="banner-thumb" src="${esc(b.image)}" alt=""><div class="item-info"><h3>${esc(b.title)}</h3><p>${bannerActive(b)?'No ar':b.active?'Programado ou encerrado':'Inativo'} · ${b.startAt?dt(b.startAt):'Início imediato'} · ${b.endAt?dt(b.endAt):'Sem término'}</p></div><button class="btn small" data-action="edit-banner" data-id="${b.id}">Editar</button></div>`).join('')}</div></div><div class="panel"><h2>Seções do portal</h2><p class="muted tiny">Altere a ordem e visibilidade dos blocos da página inicial.</p><div class="stack">${db.homeSections.map((s,i)=>`<div class="item-card"><div class="item-info"><h3>${esc(s.title)}</h3><p>${esc(s.kind)}</p></div><label class="tiny"><input type="checkbox" data-action="toggle-section" data-id="${s.id}" ${s.active?'checked':''}> Visível</label><button class="btn small" data-action="move-section" data-id="${s.id}" data-dir="-1" ${i===0?'disabled':''}>↑</button><button class="btn small" data-action="move-section" data-id="${s.id}" data-dir="1" ${i===db.homeSections.length-1?'disabled':''}>↓</button></div>`).join('')}</div></div>`}
@@ -676,16 +676,16 @@ if(hosted&&!route.studio&&publicLoadState!=='ready'){
  const failure=publicLoadState==='error';
  root.innerHTML=publicNav()+'<main class="container public-loading">'+
   '<h1>'+(failure?'Não foi possível carregar o catálogo':'Carregando catálogo...')+'</h1>'+
-  '<p class="muted">'+(failure?'Os dados do servidor estão indisponíveis. Não serão exibidos exemplos como se fossem conteúdos publicados.':'Consultando as produções cadastradas no CenaLivre.')+'</p>'+
+  '<p class="muted">'+(failure?'Não foi possível carregar as séries. Tente novamente.':'Aguarde um instante.')+'</p>'+
   (failure?'<button class="btn primary" data-action="retry-public">Tentar novamente</button>':'<div class="loading-track"></div>')+
-  '<p class="muted tiny">Frontend v'+esc(frontendVersion)+'</p></main>';
+  '</main>';
  return;
 }
 if(route.studio){
   if(hosted&&!studioUser){root.innerHTML=studioLogin();return}
   if(hosted&&!studioData){root.innerHTML=publicNav()+'<main class="container"><p>Carregando Studio...</p></main>';return}
   root.innerHTML=studioPage();return
-}let content=route.path==='/'?home():route.parts[0]==='explorar'?explore():route.parts[0]==='serie'?seriesPage(route.parts[1]):route.parts[0]==='assistir'?watchPage(route.parts[1]):route.parts[0]==='entrar'?'<main class="container"><button class="btn primary" data-action="go-studio">Entrar no Studio</button></main>':missing();root.innerHTML=publicNav()+content+`<footer class="footer">CenaLivre · Séries independentes · <span class="app-version">Frontend v${esc(frontendVersion)}</span></footer>`;
+}let content=route.path==='/'?home():route.parts[0]==='explorar'?explore():route.parts[0]==='serie'?seriesPage(route.parts[1]):route.parts[0]==='assistir'?watchPage(route.parts[1]):route.parts[0]==='entrar'?'<main class="container"><button class="btn primary" data-action="go-studio">Entrar no Studio</button></main>':missing();root.innerHTML=publicNav()+content+`<footer class="footer">CenaLivre · Séries independentes</footer>`;
 if(route.parts[0]==='assistir'&&activeVideo===route.parts[1]){
  const episode=by('episodes',route.parts[1]);
  const video=episode&&playable(episode)?ytId(episode.youtube):null;
@@ -768,6 +768,26 @@ function formSubmit(form){const type=form.dataset.form;if(!type)return;
 if(hosted){if(['series','seasons','episodes','teams','members','banners'].includes(type)){void saveRemoteEntity(form);}else toast('Esta operação ainda não está habilitada.');return;}
 const f=new FormData(form),v=Object.fromEntries(f.entries());if(type==='episodes'&&v.endAt&&v.releaseAt&&new Date(v.endAt)<=new Date(v.releaseAt)){toast('O término precisa ser posterior à estreia.');return}if(type==='banners'&&v.endAt&&v.startAt&&new Date(v.endAt)<=new Date(v.startAt)){toast('O fim da campanha precisa ser posterior ao início.');return}if(type==='series'){v.slug=slug(v.title);v.teamIds=f.getAll('teamIds');v.featured=f.has('featured')}if(type==='banners'){v.active=f.has('active');v.order=Number(v.order)||1}if(type==='episodes'){v.number=Number(v.number);v.duration=Number(v.duration);v.status=v.status||'scheduled'}if(type==='seasons')v.number=Number(v.number);if(type==='series'&&!v.teamIds.length){toast('Selecione uma equipe responsável.');return}const old=form.dataset.id&&by(type,form.dataset.id);if(old)Object.assign(old,v);else db[type].push({id:id(type[0]),...v});save();document.getElementById('modal-root').innerHTML='';render();toast('Alterações salvas nesta demonstração.')}
 function handle(action,el){const eid=el.dataset.id;
+if(action==='create-season'){
+ if(!db.series.length){toast('Crie uma série antes de cadastrar temporadas.');return;}
+ openEditor('seasons');
+ const requested=catalogFilters.seasons.seriesId;
+ if(requested!=='all'){
+  const input=document.querySelector('#modal-root [name="seriesId"]');
+  if(input)input.value=requested;
+ }
+ return;
+}
+if(action==='create-episode'){
+ if(!db.seasons.length){toast('Crie uma temporada antes de cadastrar episódios.');return;}
+ openEditor('episodes');
+ const selected=catalogFilters.episodes.seriesId;
+ if(selected!=='all'){
+  const season=db.seasons.filter(se=>se.seriesId===selected).sort((a,b)=>a.number-b.number)[0];
+  if(season){const input=document.querySelector('#modal-root [name="seasonId"]');if(input)input.value=season.id;}
+ }
+ return;
+}
 if(action==='catalog-clear'){
  const type=el.dataset.type;if(!catalogFilters[type])return;
  for(const key of Object.keys(catalogFilters[type]))catalogFilters[type][key]=key==='query'?'':'all';
@@ -826,7 +846,7 @@ if(action==='logout'){void logoutStudio();return}
 if(hosted&&route.studio&&(/^(reset|move-section|toggle-section)$/.test(action))){
   toast('Funcionalidade administrativa em migração. Nenhum dado foi alterado.');return;
 }
-switch(action){case'route':nav(el.dataset.path);break;case'go-studio':nav('/studio/dashboard');break;case'go-series':nav('/serie/'+eid);break;case'watch':if(eid)nav('/assistir/'+eid);break;case'play-video':{const e=by('episodes',eid);if(!e||!playable(e))break;if(ytId(e.youtube)){activeVideo=eid;render()}else toast('Vídeo fictício. Insira um link do YouTube no Studio para reproduzir.');break}case'home-view':homeView=el.dataset.view==='list'?'list':'grid';render();break;case'catalog-view':catalogView=el.dataset.view==='list'?'list':'grid';localStorage.setItem('cenalivre-catalog-view',catalogView);render();break;case'filter-cat':filterCategory=el.dataset.cat;history.replaceState(null,'','#/explorar');render();break;case'fav':{const i=db.saved.indexOf(eid);if(i>=0)db.saved.splice(i,1);else db.saved.push(eid);save();render();toast(i>=0?'Removido da lista.':'Adicionado à lista deste navegador.');break}case'toggle-side':document.getElementById('sidebar')?.classList.toggle('open');break;case'close-modal':document.getElementById('modal-root').innerHTML='';break;case'create-series':openEditor('series');break;case'edit-series':openEditor('series',eid);break;case'create-season':openEditor('seasons');break;case'edit-season':openEditor('seasons',eid);break;case'create-episode':openEditor('episodes');break;case'edit-episode':openEditor('episodes',eid);break;case'create-banner':openEditor('banners');break;case'edit-banner':openEditor('banners',eid);break;case'create-team':openEditor('teams');break;case'edit-team':openEditor('teams',eid);break;case'create-member':openEditor('members');break;case'edit-member':openEditor('members',eid);break;case'add-media':openEditor('media');break;case'toggle-section':{let x=by('homeSections',eid);if(x)x.active=el.checked;save();render();break}case'move-section':{const i=db.homeSections.findIndex(x=>x.id===eid),j=i+Number(el.dataset.dir);if(j>=0&&j<db.homeSections.length)[db.homeSections[i],db.homeSections[j]]=[db.homeSections[j],db.homeSections[i]];save();render();break}case'copy-url':navigator.clipboard?.writeText(el.dataset.url).then(()=>toast('URL copiada.'),()=>toast('Não foi possível copiar automaticamente.'));break;case'reset':if(confirm('Restaurar todos os dados fictícios? Suas alterações locais serão perdidas.')){db=initial();save();nav('/studio/dashboard');render();toast('Dados restaurados.')}break;}}
+switch(action){case'route':nav(el.dataset.path);break;case'go-studio':nav('/studio/dashboard');break;case'go-series':nav('/serie/'+eid);break;case'watch':if(eid)nav('/assistir/'+eid);break;case'play-video':{const e=by('episodes',eid);if(!e||!playable(e))break;if(ytId(e.youtube)){activeVideo=eid;render()}else toast('Vídeo indisponível. Verifique o link do episódio.');break}case'home-view':homeView=el.dataset.view==='list'?'list':'grid';render();break;case'catalog-view':catalogView=el.dataset.view==='list'?'list':'grid';localStorage.setItem('cenalivre-catalog-view',catalogView);render();break;case'filter-cat':filterCategory=el.dataset.cat;history.replaceState(null,'','#/explorar');render();break;case'fav':{const i=db.saved.indexOf(eid);if(i>=0)db.saved.splice(i,1);else db.saved.push(eid);save();render();toast(i>=0?'Removido da lista.':'Adicionado à lista deste navegador.');break}case'toggle-side':document.getElementById('sidebar')?.classList.toggle('open');break;case'close-modal':document.getElementById('modal-root').innerHTML='';break;case'create-series':openEditor('series');break;case'edit-series':openEditor('series',eid);break;case'create-season':openEditor('seasons');break;case'edit-season':openEditor('seasons',eid);break;case'create-episode':openEditor('episodes');break;case'edit-episode':openEditor('episodes',eid);break;case'create-banner':openEditor('banners');break;case'edit-banner':openEditor('banners',eid);break;case'create-team':openEditor('teams');break;case'edit-team':openEditor('teams',eid);break;case'create-member':openEditor('members');break;case'edit-member':openEditor('members',eid);break;case'add-media':openEditor('media');break;case'toggle-section':{let x=by('homeSections',eid);if(x)x.active=el.checked;save();render();break}case'move-section':{const i=db.homeSections.findIndex(x=>x.id===eid),j=i+Number(el.dataset.dir);if(j>=0&&j<db.homeSections.length)[db.homeSections[i],db.homeSections[j]]=[db.homeSections[j],db.homeSections[i]];save();render();break}case'copy-url':navigator.clipboard?.writeText(el.dataset.url).then(()=>toast('URL copiada.'),()=>toast('Não foi possível copiar automaticamente.'));break;case'reset':if(confirm('Restaurar todos os dados fictícios? Suas alterações locais serão perdidas.')){db=initial();save();nav('/studio/dashboard');render();toast('Dados restaurados.')}break;}}
 document.addEventListener('click',e=>{
  const el=e.target.closest('[data-action]');if(!el)return;
  if(el.dataset.action==='close-modal'&&el.classList.contains('modal-backdrop')&&e.target!==el)return;
