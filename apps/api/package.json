@@ -11,7 +11,8 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/server.js",
     "test": "tsx --test src/*.test.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "bootstrap-admin": "node dist/bootstrap.js"
   },
   "dependencies": {
     "fastify": "5.6.1",
