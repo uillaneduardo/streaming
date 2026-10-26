@@ -58,4 +58,5 @@ if (location.protocol === 'http:' || location.protocol === 'https:') {
     })
     .catch(() => { /* Sem API: dados locais para demonstração */ });
 
+}
 })();
