@@ -104,3 +104,23 @@ assert.match(css,/\.catalog-bulk-bar/,'Bulk toolbar styled');
 assert.match(css,/\.catalog-checkbox/,'Selection styled');
 assert.match(js,/\/api\/v1\/studio\/bulk/,'Bulk operations use backend');
 console.log('Ações em lote, seleção filtrada e confirmação: OK');
+
+for(const component of ['editorialPanel','editorialToolbar','editorialActions','editorialRows',
+ 'refreshEditorialPanel','openSectionEditor','persistSection','moveEditorialSection',
+ 'prepareEditorialOperation','runEditorialOperation']){
+ assert.ok(js.includes('function '+component+'(')||js.includes('async function '+component+'('),
+   'Missing editorial management '+component);
+}
+for(const marker of ['data-editorial-search','data-editorial-filter','data-editorial-row',
+ 'data-editorial-select-all','editorial-section-form','editorial-reschedule-form',
+ 'editorial-confirm','editorial-move','/api/v1/studio/calendar/reschedule',
+ '/api/v1/studio/editorial/bulk','/api/v1/studio/sections/order']){
+ assert.ok(js.includes(marker),'Missing editorial action '+marker);
+}
+assert.match(css,/\.admin \.modal \.form-grid\{grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/,
+ 'Modal has flexible form columns');
+assert.match(css,/\.admin \.input,.admin \.select,.admin \.textarea/,
+ 'Inputs share improved padding and line height');
+assert.match(css,/\.cms-panel-head/,'CMS actions responsive');
+assert.match(css,/\.cms-table/,'CMS listing style present');
+console.log('CMS, banners, editorial calendar and form spacing: OK');
