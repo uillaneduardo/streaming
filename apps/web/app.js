@@ -187,10 +187,116 @@ function updateMediaPicker(){
 }
 function closeMediaPicker(){document.getElementById('media-picker-root')?.remove();mediaPickerField=null}
 function mediaField(label,name,value='',kind='other'){
- return '<div class="field media-field"><label>'+esc(label)+'</label>'+
- '<div class="media-input-row"><input class="input" name="'+name+'" value="'+esc(value)+'" placeholder="Selecione da Biblioteca ou cole uma URL">'+
- '<button type="button" class="btn small" data-action="media-choose" data-field="'+name+'" data-kind="'+kind+'">Biblioteca</button></div>'+
- '<div class="media-field-preview">'+(value?'<img src="'+esc(value)+'" alt="Prévia">':'<span class="muted">Nenhuma imagem selecionada</span>')+'</div></div>';
+ const picture=value?'<img src="'+esc(value)+'" alt="Mídia selecionada">':'<span class="media-empty-icon" aria-hidden="true">▧</span>';
+ return '<div class="field media-field" data-media-kind="'+esc(kind)+'"><label>'+esc(label)+'</label>'+
+  '<div class="media-inline-card"><button type="button" class="media-inline-thumb" data-action="media-choose" data-field="'+esc(name)+'" data-kind="'+esc(kind)+'" aria-label="Escolher '+esc(label)+' da Biblioteca">'+picture+'</button>'+
+  '<div class="media-inline-controls"><div class="media-inline-buttons">'+
+  '<button type="button" class="btn small" data-action="media-choose" data-field="'+esc(name)+'" data-kind="'+esc(kind)+'">▧ Escolher mídia</button>'+
+  '<label class="btn small media-inline-upload-btn">↑ Enviar imagem<input type="file" class="media-inline-file" accept="image/png,image/jpeg,image/webp,image/gif" aria-label="Enviar '+esc(label)+'"></label>'+
+  (value?'<button type="button" class="btn small media-inline-clear" data-action="media-clear" data-field="'+esc(name)+'" aria-label="Limpar seleção">×</button>':'')+'</div>'+
+  '<small class="media-inline-hint">Imagem do homelab ou já cadastrada na Biblioteca</small></div></div>'+
+  '<div class="media-inline-status" role="status" aria-live="polite"></div>'+
+  '<progress class="media-inline-progress" max="100" value="0" hidden></progress>'+
+  '<details class="media-manual-url"><summary>Inserir URL manualmente</summary><input class="input" name="'+esc(name)+'" value="'+esc(value)+'" placeholder="/api/v1/media/files/... ou URL HTTPS" autocomplete="off"></details></div>';
+}
+function assignMediaToField(field,url){
+ const input=Array.from(document.querySelectorAll('#modal-root [name],#settings-form [name]')).find(x=>x.name===field);
+ if(!input)return false;
+ input.value=url;input.dispatchEvent(new Event('input',{bubbles:true}));
+ return true;
+}
+function mediaUploadTeam(field){
+ if(studioUser?.isAdmin)return '';
+ const input=Array.from(document.querySelectorAll('#modal-root [name],#settings-form [name]')).find(x=>x.name===field);
+ const form=input?.closest('form');
+ let ids=[];
+ if(form?.dataset.form==='series'){
+  ids=Array.from(form.querySelectorAll('[name="teamIds"]:checked')).map(x=>x.value);
+  if(!ids.length){const existing=db.series.find(x=>x.id===form.dataset.id);ids=existing?.teamIds||[];}
+ }else if(form?.dataset.form==='episodes'){
+  const seasonId=form.querySelector('[name="seasonId"]')?.value||db.episodes.find(x=>x.id===form.dataset.id)?.seasonId;
+  const season=db.seasons.find(x=>x.id===seasonId);
+  ids=db.series.find(x=>x.id===season?.seriesId)?.teamIds||[];
+ }else if(form?.dataset.form==='banners'){
+  ids=db.series.find(x=>x.id===form.querySelector('[name="target"]')?.value)?.teamIds||[];
+ }
+ return ids.find(id=>db.teams.some(t=>t.id===id))||db.teams[0]?.id||'';
+}
+function updateInlineMediaField(field,url){
+ const input=Array.from(document.querySelectorAll('#modal-root [name],#settings-form [name]')).find(x=>x.name===field);
+ if(!input)return;
+ const card=input.closest('.media-field');if(!card)return;
+ const thumb=card.querySelector('.media-inline-thumb');
+ if(thumb)thumb.innerHTML=url?'<img src="'+esc(url)+'" alt="Mídia selecionada">':'<span class="media-empty-icon" aria-hidden="true">▧</span>';
+ const clear=card.querySelector('.media-inline-clear');
+ if(clear)clear.hidden=!url;
+ const status=card.querySelector('.media-inline-status');
+ if(status&&!card.classList.contains('uploading'))status.textContent=url?'Imagem selecionada.':'';
+}
+function uploadProgressRequest(file,{name,kind,teamId,tags},onProgress,method='POST',endpoint='/api/v1/studio/media/upload'){
+ return new Promise((resolve,reject)=>{
+  const valid=['png','jpg','jpeg','webp','gif'];
+  const ext=(file.name.split('.').pop()||'').toLowerCase();
+  if(!valid.includes(ext))return reject(new Error('Formato não permitido. Use PNG, JPEG, WebP ou GIF.'));
+  if(!mediaData.settings.allowedTypes.includes(ext==='jpg'?'jpeg':ext))return reject(new Error('Formato desativado em Configurações → Uploads.'));
+  if(!file.size||file.size>mediaData.settings.maxFileMb*1048576)return reject(new Error('O arquivo excede o tamanho permitido.'));
+  const xhr=new XMLHttpRequest();
+  xhr.open(method,endpoint);xhr.withCredentials=true;xhr.timeout=180000;
+  xhr.setRequestHeader('Content-Type','application/octet-stream');
+  xhr.setRequestHeader('x-csrf-token',csrfToken);
+  if(method==='POST'){
+   xhr.setRequestHeader('x-media-name',encodeURIComponent(name||file.name).slice(0,500));
+   xhr.setRequestHeader('x-media-kind',kind||'other');
+   xhr.setRequestHeader('x-media-team',teamId||'');
+   xhr.setRequestHeader('x-media-tags',encodeURIComponent(tags||'').slice(0,1000));
+  }
+  xhr.upload.onprogress=e=>{if(e.lengthComputable)onProgress?.(Math.round(e.loaded*100/e.total))};
+  xhr.onerror=()=>reject(new Error('Erro de rede. Verifique a conexão com o homelab.'));
+  xhr.ontimeout=()=>reject(new Error('O upload excedeu o tempo de espera.'));
+  xhr.onload=()=>{
+   let result;try{result=JSON.parse(xhr.responseText)}catch{result={}}
+   if(xhr.status>=200&&xhr.status<300)return resolve(result);
+   const errors={request_entity_too_large:'O arquivo excede o limite do servidor (HTTP 413).',
+    file_too_large:'Arquivo acima do limite configurado.',unsupported_file_format:'Formato não aceito pelo servidor.',
+    media_limit_reached:'Capacidade da Biblioteca atingida.',forbidden:'Sua equipe não tem autorização.',
+    unauthorized:'Sessão expirada, entre novamente.',csrf_required:'Sessão inválida, recarregue o Studio.'};
+   reject(new Error(errors[result.error]||result.error||'Falha ao enviar imagem (HTTP '+xhr.status+').'));
+  };
+  xhr.send(file);
+ });
+}
+async function uploadInlineMedia(input){
+ const file=input.files?.[0];if(!file)return;
+ const card=input.closest('.media-field');const status=card?.querySelector('.media-inline-status');
+ const progress=card?.querySelector('.media-inline-progress');
+ const manual=card?.querySelector('.media-manual-url input');
+ const thumb=card?.querySelector('.media-inline-thumb');
+ const original=manual?.value||'';const oldPreview=thumb?.innerHTML;
+ const localURL=URL.createObjectURL(file);
+ if(thumb)thumb.innerHTML='<img src="'+localURL+'" alt="Prévia antes do upload">';
+ card?.classList.add('uploading');if(progress){progress.hidden=false;progress.value=0;}
+ if(status)status.textContent='Preparando '+file.name+'...';
+ input.disabled=true;
+ try{
+  const result=await uploadProgressRequest(file,{name:file.name,kind:card?.dataset.mediaKind||'other',
+   teamId:mediaUploadTeam(manual?.name||''),tags:''},
+   percent=>{if(progress)progress.value=percent;if(status)status.textContent='Enviando '+file.name+' · '+percent+'%';});
+  if(!result?.url)throw new Error('Servidor não retornou a URL da imagem.');
+  await fetchMedia();
+  assignMediaToField(manual?.name||'',result.url);
+  if(status)status.textContent='✓ Imagem salva no homelab. '+file.name;
+  if(progress)progress.value=100;
+  toast('Imagem enviada e vinculada ao formulário.');
+ }catch(error){
+  if(thumb)thumb.innerHTML=oldPreview||'';
+  if(manual)manual.value=original;
+  if(status)status.textContent='Falha: '+error.message;
+  card?.classList.add('upload-error');toast(error.message);
+ }finally{
+  URL.revokeObjectURL(localURL);
+  card?.classList.remove('uploading');input.disabled=false;input.value='';
+  if(progress)progress.hidden=true;
+ }
 }
 function mediaUploadModal(){
  const kinds=mediaCategories.map(c=>'<option value="'+c.id+'">'+c.title+'</option>').join('');
