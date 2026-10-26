@@ -25,3 +25,10 @@ sudo docker compose config --quiet
 sudo docker compose up -d --build
 sudo docker compose ps -a
 curl -fsS https://cenalivre.ulln.com.br/api/v1/health
+
+## Interface M1.4
+- Campos de pôster, banner, thumbnail, logo e ícone possuem prévia, escolha na Biblioteca e envio no próprio campo com progresso de bytes do navegador.
+- O arquivo só é vinculado ao formulário após a confirmação HTTP do servidor; erros aparecem no campo e não apagam o restante do formulário.
+- A galeria exibe ✎ para editar e × para excluir sobre as miniaturas ao passar o mouse ou focar pelo teclado.
+- Configurações do Studio estão agrupadas em Identidade, Marca, Reprodução, Uploads e Segurança.
+- O Nginx suporta até 21 MB de corpo por requisição para acomodar o limite máximo de 20 MB da API; o CI valida um PNG real de mais de 1 MB pelo proxy.

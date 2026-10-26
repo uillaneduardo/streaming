@@ -152,16 +152,19 @@ const mediaTags=s=>String(s||'').split(/[,;\n]/).map(t=>t.trim().toLowerCase()).
 const mediaFilterItems=(items,search,kind,tag)=>items.filter(a=>
   (kind==='all'||a.kind===kind)&&(!tag||a.tags.includes(tag))&&
   (!search||[a.name,a.originalName,a.kind,...a.tags].join(' ').toLowerCase().includes(search.toLowerCase())));
-const mediaCard=(a,picker=false)=>'<article class="media-card"><div class="media-image"><img src="'+esc(a.url)+'" alt="'+esc(a.name)+'" loading="lazy"></div>'+
+const mediaCard=(a,picker=false)=>'<article class="media-card"><div class="media-image media-tile">'+
+ '<img src="'+esc(a.url)+'" alt="'+esc(a.name)+'" loading="lazy">'+
+ (picker?'':'<div class="media-tile-overlay" aria-label="Ações da mídia">'+
+ '<button class="media-overlay-action" type="button" data-action="media-edit" data-id="'+esc(a.id)+'" title="Editar '+esc(a.name)+'" aria-label="Editar '+esc(a.name)+'">✎</button>'+
+ '<button class="media-overlay-action danger" type="button" data-action="media-delete" data-id="'+esc(a.id)+'" title="Excluir '+esc(a.name)+'" aria-label="Excluir '+esc(a.name)+'">×</button></div>')+'</div>'+
  '<strong title="'+esc(a.name)+'">'+esc(a.name)+'</strong>'+
  '<div class="media-meta">'+mediaName(a.kind)+' · '+(a.size/1048576).toFixed(2)+' MB</div>'+
  '<div class="media-tags">'+a.tags.map(t=>'<span class="media-tag">'+esc(t)+'</span>').join('')+'</div>'+
  '<div class="media-actions">'+(picker?
- '<button class="btn small primary" data-action="media-pick" data-id="'+esc(a.id)+'">Selecionar</button>':
- '<button class="btn small" data-action="media-edit" data-id="'+esc(a.id)+'">Editar</button>'+
- '<button class="btn small" data-action="media-copy" data-id="'+esc(a.id)+'">Copiar</button>'+
- '<button class="btn small" data-action="media-download" data-id="'+esc(a.id)+'">Baixar</button>'+
- '<button class="btn small danger" data-action="media-delete" data-id="'+esc(a.id)+'">Excluir</button>')+'</div></article>';
+ '<button type="button" class="btn small primary" data-action="media-pick" data-id="'+esc(a.id)+'">Selecionar</button>':
+ '<button type="button" class="btn small" data-action="media-edit" data-id="'+esc(a.id)+'">Editar</button>'+
+ '<button type="button" class="btn small" data-action="media-copy" data-id="'+esc(a.id)+'">Copiar URL</button>'+
+ '<button type="button" class="btn small" data-action="media-download" data-id="'+esc(a.id)+'">Baixar</button>')+'</div></article>';
 function openMediaPicker(field,kind){
  mediaPickerField=field;mediaPickerKind=kind||'all';
  let root=document.getElementById('media-picker-root');
@@ -187,10 +190,116 @@ function updateMediaPicker(){
 }
 function closeMediaPicker(){document.getElementById('media-picker-root')?.remove();mediaPickerField=null}
 function mediaField(label,name,value='',kind='other'){
- return '<div class="field media-field"><label>'+esc(label)+'</label>'+
- '<div class="media-input-row"><input class="input" name="'+name+'" value="'+esc(value)+'" placeholder="Selecione da Biblioteca ou cole uma URL">'+
- '<button type="button" class="btn small" data-action="media-choose" data-field="'+name+'" data-kind="'+kind+'">Biblioteca</button></div>'+
- '<div class="media-field-preview">'+(value?'<img src="'+esc(value)+'" alt="Prévia">':'<span class="muted">Nenhuma imagem selecionada</span>')+'</div></div>';
+ const picture=value?'<img src="'+esc(value)+'" alt="Mídia selecionada">':'<span class="media-empty-icon" aria-hidden="true">▧</span>';
+ return '<div class="field media-field" data-media-kind="'+esc(kind)+'"><label>'+esc(label)+'</label>'+
+  '<div class="media-inline-card"><button type="button" class="media-inline-thumb" data-action="media-choose" data-field="'+esc(name)+'" data-kind="'+esc(kind)+'" aria-label="Escolher '+esc(label)+' da Biblioteca">'+picture+'</button>'+
+  '<div class="media-inline-controls"><div class="media-inline-buttons">'+
+  '<button type="button" class="btn small" data-action="media-choose" data-field="'+esc(name)+'" data-kind="'+esc(kind)+'">▧ Escolher mídia</button>'+
+  '<label class="btn small media-inline-upload-btn">↑ Enviar imagem<input type="file" class="media-inline-file" accept="image/png,image/jpeg,image/webp,image/gif" aria-label="Enviar '+esc(label)+'"></label>'+
+  '<button type="button" class="btn small media-inline-clear" data-action="media-clear" data-field="'+esc(name)+'" aria-label="Limpar seleção" '+(value?'':'hidden')+'>×</button>'+'</div>'+
+  '<small class="media-inline-hint">Imagem do homelab ou já cadastrada na Biblioteca</small></div></div>'+
+  '<div class="media-inline-status" role="status" aria-live="polite"></div>'+
+  '<progress class="media-inline-progress" max="100" value="0" hidden></progress>'+
+  '<details class="media-manual-url"><summary>Inserir URL manualmente</summary><input class="input" name="'+esc(name)+'" value="'+esc(value)+'" placeholder="/api/v1/media/files/... ou URL HTTPS" autocomplete="off"></details></div>';
+}
+function assignMediaToField(field,url){
+ const input=Array.from(document.querySelectorAll('#modal-root [name],#settings-form [name]')).find(x=>x.name===field);
+ if(!input)return false;
+ input.value=url;input.dispatchEvent(new Event('input',{bubbles:true}));
+ return true;
+}
+function mediaUploadTeam(field){
+ if(studioUser?.isAdmin)return '';
+ const input=Array.from(document.querySelectorAll('#modal-root [name],#settings-form [name]')).find(x=>x.name===field);
+ const form=input?.closest('form');
+ let ids=[];
+ if(form?.dataset.form==='series'){
+  ids=Array.from(form.querySelectorAll('[name="teamIds"]:checked')).map(x=>x.value);
+  if(!ids.length){const existing=db.series.find(x=>x.id===form.dataset.id);ids=existing?.teamIds||[];}
+ }else if(form?.dataset.form==='episodes'){
+  const seasonId=form.querySelector('[name="seasonId"]')?.value||db.episodes.find(x=>x.id===form.dataset.id)?.seasonId;
+  const season=db.seasons.find(x=>x.id===seasonId);
+  ids=db.series.find(x=>x.id===season?.seriesId)?.teamIds||[];
+ }else if(form?.dataset.form==='banners'){
+  ids=db.series.find(x=>x.id===form.querySelector('[name="target"]')?.value)?.teamIds||[];
+ }
+ return ids.find(id=>db.teams.some(t=>t.id===id))||db.teams[0]?.id||'';
+}
+function updateInlineMediaField(field,url){
+ const input=Array.from(document.querySelectorAll('#modal-root [name],#settings-form [name]')).find(x=>x.name===field);
+ if(!input)return;
+ const card=input.closest('.media-field');if(!card)return;
+ const thumb=card.querySelector('.media-inline-thumb');
+ if(thumb)thumb.innerHTML=url?'<img src="'+esc(url)+'" alt="Mídia selecionada">':'<span class="media-empty-icon" aria-hidden="true">▧</span>';
+ const clear=card.querySelector('.media-inline-clear');
+ if(clear)clear.hidden=!url;
+ const status=card.querySelector('.media-inline-status');
+ if(status&&!card.classList.contains('uploading'))status.textContent=url?'Imagem selecionada.':'';
+}
+function uploadProgressRequest(file,{name,kind,teamId,tags},onProgress,method='POST',endpoint='/api/v1/studio/media/upload'){
+ return new Promise((resolve,reject)=>{
+  const valid=['png','jpg','jpeg','webp','gif'];
+  const ext=(file.name.split('.').pop()||'').toLowerCase();
+  if(!valid.includes(ext))return reject(new Error('Formato não permitido. Use PNG, JPEG, WebP ou GIF.'));
+  if(!mediaData.settings.allowedTypes.includes(ext==='jpg'?'jpeg':ext))return reject(new Error('Formato desativado em Configurações → Uploads.'));
+  if(!file.size||file.size>mediaData.settings.maxFileMb*1048576)return reject(new Error('O arquivo excede o tamanho permitido.'));
+  const xhr=new XMLHttpRequest();
+  xhr.open(method,endpoint);xhr.withCredentials=true;xhr.timeout=180000;
+  xhr.setRequestHeader('Content-Type','application/octet-stream');
+  xhr.setRequestHeader('x-csrf-token',csrfToken);
+  if(method==='POST'){
+   xhr.setRequestHeader('x-media-name',encodeURIComponent(name||file.name).slice(0,500));
+   xhr.setRequestHeader('x-media-kind',kind||'other');
+   xhr.setRequestHeader('x-media-team',teamId||'');
+   xhr.setRequestHeader('x-media-tags',encodeURIComponent(tags||'').slice(0,1000));
+  }
+  xhr.upload.onprogress=e=>{if(e.lengthComputable)onProgress?.(Math.round(e.loaded*100/e.total))};
+  xhr.onerror=()=>reject(new Error('Erro de rede. Verifique a conexão com o homelab.'));
+  xhr.ontimeout=()=>reject(new Error('O upload excedeu o tempo de espera.'));
+  xhr.onload=()=>{
+   let result;try{result=JSON.parse(xhr.responseText)}catch{result={}}
+   if(xhr.status>=200&&xhr.status<300)return resolve(result);
+   const errors={request_entity_too_large:'O arquivo excede o limite do servidor (HTTP 413).',
+    file_too_large:'Arquivo acima do limite configurado.',unsupported_file_format:'Formato não aceito pelo servidor.',
+    media_limit_reached:'Capacidade da Biblioteca atingida.',forbidden:'Sua equipe não tem autorização.',
+    unauthorized:'Sessão expirada, entre novamente.',csrf_required:'Sessão inválida, recarregue o Studio.'};
+   reject(new Error(errors[result.error]||result.error||'Falha ao enviar imagem (HTTP '+xhr.status+').'));
+  };
+  xhr.send(file);
+ });
+}
+async function uploadInlineMedia(input){
+ const file=input.files?.[0];if(!file)return;
+ const card=input.closest('.media-field');const status=card?.querySelector('.media-inline-status');
+ const progress=card?.querySelector('.media-inline-progress');
+ const manual=card?.querySelector('.media-manual-url input');
+ const thumb=card?.querySelector('.media-inline-thumb');
+ const original=manual?.value||'';const oldPreview=thumb?.innerHTML;
+ const localURL=URL.createObjectURL(file);
+ if(thumb)thumb.innerHTML='<img src="'+localURL+'" alt="Prévia antes do upload">';
+ card?.classList.add('uploading');if(progress){progress.hidden=false;progress.value=0;}
+ if(status)status.textContent='Preparando '+file.name+'...';
+ input.disabled=true;
+ try{
+  const result=await uploadProgressRequest(file,{name:file.name,kind:card?.dataset.mediaKind||'other',
+   teamId:mediaUploadTeam(manual?.name||''),tags:''},
+   percent=>{if(progress)progress.value=percent;if(status)status.textContent='Enviando '+file.name+' · '+percent+'%';});
+  if(!result?.url)throw new Error('Servidor não retornou a URL da imagem.');
+  await fetchMedia();
+  assignMediaToField(manual?.name||'',result.url);
+  if(status)status.textContent='✓ Imagem salva no homelab. '+file.name;
+  if(progress)progress.value=100;
+  toast('Imagem enviada e vinculada ao formulário.');
+ }catch(error){
+  if(thumb)thumb.innerHTML=oldPreview||'';
+  if(manual)manual.value=original;
+  if(status)status.textContent='Falha: '+error.message;
+  card?.classList.add('upload-error');toast(error.message);
+ }finally{
+  URL.revokeObjectURL(localURL);
+  card?.classList.remove('uploading');input.disabled=false;input.value='';
+  if(progress)progress.hidden=true;
+ }
 }
 function mediaUploadModal(){
  const kinds=mediaCategories.map(c=>'<option value="'+c.id+'">'+c.title+'</option>').join('');
@@ -201,42 +310,28 @@ function mediaUploadModal(){
  '<label class="media-drop"><span>Arraste imagens aqui ou clique para selecionar</span><small>PNG, JPEG, WebP ou GIF · Limite: '+mediaData.settings.maxFileMb+' MB</small>'+
  '<input type="file" name="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple required></label>'+
  '<div id="media-upload-preview" class="media-preview">Prévia da imagem aparecerá aqui</div>'+
+ '<progress class="media-batch-progress" max="100" value="0" hidden></progress><p class="muted tiny" id="media-batch-status" role="status" aria-live="polite"></p>'+
  '<div class="field"><label>Nome personalizado (opcional em envio único)</label><input class="input" name="name" placeholder="Use o nome do arquivo se deixar vazio"></div>'+
  '<div class="field"><label>Categoria</label><select name="kind" class="select">'+kinds+'</select></div>'+
  '<div class="field"><label>Tags (separadas por vírgula)</label><input class="input" name="tags" placeholder="destaque, série, temporada"></div>'+
  teams+'<div class="row between"><button class="btn" data-action="close-modal" type="button">Cancelar</button>'+
  '<button class="btn primary" type="submit">Enviar arquivo</button></div></form>');
 }
-async function mediaUpload(file,{name,kind,teamId,tags}){
- if(!file)return;
- const ext=(file.name.split('.').pop()||'').toLowerCase();
- if(!['png','jpg','jpeg','webp','gif'].includes(ext)){toast('Formato não aceito.');return}
- if(file.size>mediaData.settings.maxFileMb*1024*1024){toast('Arquivo excede o limite configurado.');return}
- const request={
-  method:'POST',credentials:'same-origin',
-  headers:{'Content-Type':'application/octet-stream','x-csrf-token':csrfToken,
-   'x-media-name':encodeURIComponent(name||file.name).slice(0,500),'x-media-kind':kind||'other',
-   'x-media-team':teamId||'','x-media-tags':encodeURIComponent(tags||'').slice(0,1000)},
-  body:file
- };
- const response=await fetch('/api/v1/studio/media/upload',request);
- const data=await response.json().catch(()=>({}));
- if(!response.ok)throw new Error(({file_too_large:'Arquivo muito grande',unsupported_file_format:'Formato não permitido',
-   media_limit_reached:'Limite de arquivos atingido',forbidden:'Sem permissão para essa equipe'}[data.error])||data.error||'Falha no upload');
+async function mediaUpload(file,{name,kind,teamId,tags},onProgress){
+ const result=await uploadProgressRequest(file,{name,kind,teamId,tags},onProgress);
  await fetchMedia();
- return data;
+ return result;
 }
 async function uploadFromPicker(file){
  if(!file)return;
- const team=studioUser?.isAdmin?'':db.teams[0]?.id||'';
+ const team=mediaUploadTeam(mediaPickerField||'');
  const msg=document.getElementById('media-picker-feedback');
  if(msg)msg.textContent='Enviando '+file.name+'...';
  try{
-  const result=await mediaUpload(file,{name:file.name,kind:mediaPickerKind==='all'?'other':mediaPickerKind,teamId:team,tags:''});
+  const result=await mediaUpload(file,{name:file.name,kind:mediaPickerKind==='all'?'other':mediaPickerKind,teamId:team,tags:''},percent=>{if(msg)msg.textContent='Enviando '+file.name+' · '+percent+'%';});
   if(!result)return;
   if(mediaPickerField){
-   const target=document.querySelector('#modal-root [name="'+mediaPickerField+'"]')||document.querySelector('#settings-form [name="'+mediaPickerField+'"]');
-   if(target){target.value=result.url;target.dispatchEvent(new Event('input',{bubbles:true}))}
+   assignMediaToField(mediaPickerField,result.url);
    closeMediaPicker();
   }else{updateMediaPicker()}
   toast('Imagem enviada e disponível na Biblioteca.');
@@ -250,9 +345,16 @@ async function submitMediaUpload(form){
  let sent=0,failed=[];
  for(const file of files){
   try{
+   const bar=document.querySelector('#media-upload-form .media-batch-progress');
+   if(bar)bar.hidden=false;
    const result=await mediaUpload(file,{name:files.length===1?(String(fd.get('name')||'')||file.name):file.name,
     kind:String(fd.get('kind')||'other'),teamId:String(fd.get('teamId')||''),
-    tags:String(fd.get('tags')||'')});
+    tags:String(fd.get('tags')||'')},percent=>{
+      const bar=document.querySelector('#media-upload-form .media-batch-progress');
+      const message=document.getElementById('media-batch-status');
+      if(bar)bar.value=(sent*100+percent)/files.length;
+      if(message)message.textContent='Enviando '+file.name+' · '+percent+'% ('+(sent+1)+'/'+files.length+')';
+    });
    if(result)sent++;else failed.push(file.name);
   }catch(error){failed.push(file.name+': '+error.message)}
   const preview=document.getElementById('media-upload-preview');
@@ -274,7 +376,7 @@ function editMedia(id){
  '<option value="'+c.id+'" '+(c.id===a.kind?'selected':'')+'>'+c.title+'</option>').join('')+'</select></div>'+
  '<div class="field"><label>Tags separadas por vírgula</label><input class="input" name="tags" value="'+esc(a.tags.join(', '))+'"></div>'+
  '<div class="field"><label>Substituir arquivo (opcional)</label><input class="input" name="replacement" type="file" accept="image/png,image/jpeg,image/webp,image/gif"><small class="muted">Mantém o mesmo vínculo nas séries e episódios.</small></div>'+
- '<div class="row between"><button type="button" class="btn" data-action="close-modal">Cancelar</button>'+
+ '<p id="media-replace-status" class="muted tiny" role="status" aria-live="polite"></p>'+ '<div class="row between"><button type="button" class="btn" data-action="close-modal">Cancelar</button>'+
  '<button type="submit" class="btn primary">Salvar mídia</button></div></form>');
 }
 async function updateMedia(form){
@@ -285,11 +387,10 @@ async function updateMedia(form){
   const replacement=fd.get('replacement');
   if(replacement instanceof File && replacement.size){
     if(replacement.size>mediaData.settings.maxFileMb*1024*1024)throw new Error('Arquivo maior que o limite configurado.');
-    const response=await fetch('/api/v1/studio/media/'+encodeURIComponent(id)+'/file',{
-      method:'PUT',credentials:'same-origin',headers:{'Content-Type':'application/octet-stream','x-csrf-token':csrfToken},body:replacement
-    });
-    const result=await response.json().catch(()=>({}));
-    if(!response.ok)throw new Error(result.error||'Não foi possível substituir o arquivo');
+    const message=document.getElementById('media-replace-status');
+    await uploadProgressRequest(replacement,{name:replacement.name,kind:String(fd.get('kind')||'other'),teamId:'',tags:''},
+      percent=>{if(message)message.textContent='Substituindo arquivo · '+percent+'%';},
+      'PUT','/api/v1/studio/media/'+encodeURIComponent(id)+'/file');
   }
   await fetchMedia();document.getElementById('modal-root').innerHTML='';render();toast('Mídia atualizada.');
  }catch(error){toast(error.message)}
@@ -353,7 +454,7 @@ function mediaAdmin(){
 function scheduleAdmin(){const es=[...db.episodes].filter(e=>e.releaseAt).sort((a,b)=>new Date(a.releaseAt)-new Date(b.releaseAt));return pageHead('Calendário editorial','Controle as janelas de publicação de cada episódio.')+`<div class="panel"><h2>Linha do tempo de lançamentos</h2>${es.map(e=>`<div class="schedule-line"><div class="smallcaps">${dt(e.releaseAt)}</div><div class="row between"><div><strong>${esc(seriesForEpisode(e)?.title)} — ${esc(e.title)}</strong><div class="tiny muted">${state(e)}${e.endAt?' · expira '+dt(e.endAt):' · sem expiração'}</div></div><button class="btn small" data-action="edit-episode" data-id="${e.id}">Editar datas</button></div></div>`).join('')}</div>`}
 function homepageAdmin(){return pageHead('CMS da página inicial','Gerencie a vitrine, campanhas e ordem das seções.',`<button class="btn primary" data-action="create-banner">+ Novo banner</button>`)+`<div class="panel"><h2>Banners e campanhas</h2><div class="stack">${db.banners.map(b=>`<div class="item-card"><img class="banner-thumb" src="${esc(b.image)}" alt=""><div class="item-info"><h3>${esc(b.title)}</h3><p>${bannerActive(b)?'No ar':b.active?'Programado ou encerrado':'Inativo'} · ${b.startAt?dt(b.startAt):'Início imediato'} · ${b.endAt?dt(b.endAt):'Sem término'}</p></div><button class="btn small" data-action="edit-banner" data-id="${b.id}">Editar</button></div>`).join('')}</div></div><div class="panel"><h2>Seções do portal</h2><p class="muted tiny">Altere a ordem e visibilidade dos blocos da página inicial.</p><div class="stack">${db.homeSections.map((s,i)=>`<div class="item-card"><div class="item-info"><h3>${esc(s.title)}</h3><p>${esc(s.kind)}</p></div><label class="tiny"><input type="checkbox" data-action="toggle-section" data-id="${s.id}" ${s.active?'checked':''}> Visível</label><button class="btn small" data-action="move-section" data-id="${s.id}" data-dir="-1" ${i===0?'disabled':''}>↑</button><button class="btn small" data-action="move-section" data-id="${s.id}" data-dir="1" ${i===db.homeSections.length-1?'disabled':''}>↓</button></div>`).join('')}</div></div>`}
 function teamsAdmin(){return pageHead('Equipes e permissões','Colaboradores, papéis e responsabilidade pelas produções.',`<button class="btn" data-action="create-team">+ Equipe</button><button class="btn primary" data-action="create-member">+ Integrante</button>`)+`<div class="two-column"><div class="panel"><h2>Equipes</h2><div class="stack">${db.teams.map(t=>`<div class="item-card"><div class="item-info"><h3>${esc(t.name)}</h3><p>${db.members.filter(m=>m.teamId===t.id).length} integrante(s) · ${db.series.filter(s=>s.teamIds.includes(t.id)).length} produção(ões)</p></div><button class="btn small" data-action="edit-team" data-id="${t.id}">Editar</button></div>`).join('')}</div></div><div class="panel"><h2>Integrantes</h2><table class="data-table"><thead><tr><th>Nome</th><th>Equipe</th><th>Papel</th><th></th></tr></thead><tbody>${db.members.map(m=>`<tr><td>${esc(m.name)}<div class="tiny muted">${esc(m.email)}</div></td><td>${esc(by('teams',m.teamId)?.name)}</td><td><span class="badge">${esc(m.role)}</span></td><td><button class="btn small" data-action="edit-member" data-id="${m.id}">Editar</button></td></tr>`).join('')}</tbody></table></div></div><div class="notice">Equipes e membros são administrados no servidor. A autorização é conferida pela API em cada requisição; apenas administradores podem criar contas ou equipes nesta versão.</div>`}
-function settingsAdmin(){return pageHead('Configurações','Identidade, informações públicas e preferências do CenaLivre.')+`<div class="panel form-surface-light" style="max-width:760px"><form id="settings-form" class="stack"><div class="field"><label>Nome da plataforma</label><input class="input" name="siteName" value="${esc(db.preferences.siteName)}" required></div><div class="field"><label>Descrição pública</label><textarea class="textarea" name="siteDescription">${esc(db.preferences.siteDescription)}</textarea></div><div class="field"><label>E-mail de contato institucional</label><input class="input" name="contactEmail" type="email" value="${esc(db.preferences.contactEmail||'')}" placeholder="contato@exemplo.com"></div>${mediaField('Logotipo','logoUrl',db.preferences.logoUrl||'','logo')}${mediaField('Ícone / favicon','iconUrl',db.preferences.iconUrl||'','icon')}<label class="row tiny"><input type="checkbox" name="autoplay" ${db.preferences.autoplay?'checked':''}> Sugerir reprodução automática do próximo episódio</label><div><button class="btn primary" type="submit" ${hosted&&!studioUser?.isAdmin?'disabled':''}>Salvar configurações</button></div></form></div><div class="panel form-surface-light"><h2>Uploads e armazenamento</h2><form id="upload-settings-form" class="stack"><div class="form-grid"><div class="field"><label>Tamanho máximo por arquivo (1 a 20 MB)</label><input class="input" type="number" name="maxFileMb" min="1" max="20" value="${mediaData.settings.maxFileMb}" required></div><div class="field"><label>Quantidade máxima de imagens (1 a 2000)</label><input class="input" type="number" name="maxFiles" min="1" max="2000" value="${mediaData.settings.maxFiles}" required></div></div><div class="field"><label>Formatos permitidos</label><div class="pillset">${['png','jpeg','webp','gif'].map(t=>`<label class="pill"><input type="checkbox" name="allowedTypes" value="${t}" ${mediaData.settings.allowedTypes.includes(t)?'checked':''}> ${t.toUpperCase()}</label>`).join('')}</div></div><p class="muted tiny">Os arquivos são armazenados em um volume persistente do Docker. SVG enviado pelo usuário é bloqueado por segurança. Alterações não apagam arquivos existentes.</p><div><button class="btn primary" type="submit" ${!studioUser?.isAdmin?'disabled':''}>Salvar limites de upload</button></div></form></div><div class="panel"><h2>Ambiente e segurança</h2><p class="muted">Configurações administrativas armazenadas no banco de dados. Alterações exigem autorização do administrador e são auditadas. A gestão de conteúdo ocorre nos módulos de Séries, Temporadas e Episódios.</p></div>`}
+function settingsAdmin(){return pageHead('Configurações','Identidade, marca, reprodução, mídias e segurança — tudo organizado por categoria.')+`<nav class="settings-nav" aria-label="Categorias das configurações"><button class="btn small" data-action="settings-jump" data-target="settings-identidade" type="button">Identidade</button><button class="btn small" data-action="settings-jump" data-target="settings-marca" type="button">Marca</button><button class="btn small" data-action="settings-jump" data-target="settings-reproducao" type="button">Reprodução</button><button class="btn small" data-action="settings-jump" data-target="settings-uploads" type="button">Uploads</button><button class="btn small" data-action="settings-jump" data-target="settings-seguranca" type="button">Segurança</button></nav><section class="panel form-surface-light settings-panel" id="settings-identidade"><div class="settings-section-head"><div><h2>Identidade e portal</h2><p>Dados públicos, imagens da marca e comportamento da reprodução.</p></div></div><form id="settings-form" class="stack"><fieldset class="settings-category"><legend>Identidade da plataforma</legend><div class="field"><label>Nome da plataforma</label><input class="input" name="siteName" value="${esc(db.preferences.siteName)}" required></div><div class="field"><label>Descrição pública</label><textarea class="textarea" name="siteDescription">${esc(db.preferences.siteDescription)}</textarea></div><div class="field"><label>E-mail de contato institucional</label><input class="input" name="contactEmail" type="email" value="${esc(db.preferences.contactEmail||'')}" placeholder="contato@exemplo.com"></div></fieldset><fieldset class="settings-category" id="settings-marca"><legend>Marca · logotipo e ícone</legend>${mediaField('Logotipo','logoUrl',db.preferences.logoUrl||'','logo')}${mediaField('Ícone / favicon','iconUrl',db.preferences.iconUrl||'','icon')}</fieldset><fieldset class="settings-category" id="settings-reproducao"><legend>Reprodução</legend><label class="row tiny"><input type="checkbox" name="autoplay" ${db.preferences.autoplay?'checked':''}> Sugerir reprodução automática do próximo episódio</label></fieldset><div><button class="btn primary" type="submit" ${hosted&&!studioUser?.isAdmin?'disabled':''}>Salvar configurações</button></div></form></section><section class="panel form-surface-light settings-panel" id="settings-uploads"><div class="settings-section-head"><div><h2>Biblioteca de Mídia e uploads</h2><p>Controle limites de armazenamento, formatos aceitos e políticas de envio.</p></div></div><form id="upload-settings-form" class="stack"><div class="form-grid"><div class="field"><label>Tamanho máximo por arquivo (1 a 20 MB)</label><input class="input" type="number" name="maxFileMb" min="1" max="20" value="${mediaData.settings.maxFileMb}" required></div><div class="field"><label>Quantidade máxima de imagens (1 a 2000)</label><input class="input" type="number" name="maxFiles" min="1" max="2000" value="${mediaData.settings.maxFiles}" required></div></div><div class="field"><label>Formatos permitidos</label><div class="pillset">${['png','jpeg','webp','gif'].map(t=>`<label class="pill"><input type="checkbox" name="allowedTypes" value="${t}" ${mediaData.settings.allowedTypes.includes(t)?'checked':''}> ${t.toUpperCase()}</label>`).join('')}</div></div><p class="muted tiny">Os arquivos são armazenados em um volume persistente do Docker. SVG enviado pelo usuário é bloqueado por segurança. Alterações não apagam arquivos existentes.</p><div><button class="btn primary" type="submit" ${!studioUser?.isAdmin?'disabled':''}>Salvar limites de upload</button></div></form></section><section class="panel settings-panel" id="settings-seguranca"><h2>Ambiente e segurança</h2><p class="muted">Configurações administrativas armazenadas no banco de dados. Alterações exigem autorização do administrador e são auditadas. A gestão de conteúdo ocorre nos módulos de Séries, Temporadas e Episódios. Os arquivos são mantidos no volume persistente cenalivre_media e os metadados no MariaDB.</p></section>`}
 function studioPage(){const page=route.parts[1]||'dashboard';return studioFrame(({dashboard,series:seriesAdmin,seasons:seasonsAdmin,episodes:episodesAdmin,media:mediaAdmin,schedule:scheduleAdmin,homepage:homepageAdmin,teams:teamsAdmin,settings:settingsAdmin}[page]||dashboard)())}
 function render(){parse();
 db=route.studio?(hosted?(studioData||publicData):localDemo):publicData;
@@ -402,6 +503,7 @@ function formSubmit(form){const type=form.dataset.form;if(!type)return;
 if(hosted){if(['series','seasons','episodes','teams','members','banners'].includes(type)){void saveRemoteEntity(form);}else toast('Esta operação ainda não está habilitada.');return;}
 const f=new FormData(form),v=Object.fromEntries(f.entries());if(type==='episodes'&&v.endAt&&v.releaseAt&&new Date(v.endAt)<=new Date(v.releaseAt)){toast('O término precisa ser posterior à estreia.');return}if(type==='banners'&&v.endAt&&v.startAt&&new Date(v.endAt)<=new Date(v.startAt)){toast('O fim da campanha precisa ser posterior ao início.');return}if(type==='series'){v.slug=slug(v.title);v.teamIds=f.getAll('teamIds');v.featured=f.has('featured')}if(type==='banners'){v.active=f.has('active');v.order=Number(v.order)||1}if(type==='episodes'){v.number=Number(v.number);v.duration=Number(v.duration);v.status=v.status||'scheduled'}if(type==='seasons')v.number=Number(v.number);if(type==='series'&&!v.teamIds.length){toast('Selecione uma equipe responsável.');return}const old=form.dataset.id&&by(type,form.dataset.id);if(old)Object.assign(old,v);else db[type].push({id:id(type[0]),...v});save();document.getElementById('modal-root').innerHTML='';render();toast('Alterações salvas nesta demonstração.')}
 function handle(action,el){const eid=el.dataset.id;
+if(action==='settings-jump'){document.getElementById(el.dataset.target)?.scrollIntoView({behavior:'smooth',block:'start'});return}
 if(action==='media-picker-close'){closeMediaPicker();return}
 if(action==='media-pick'){
  const media=mediaData.assets.find(a=>a.id===eid);
@@ -413,6 +515,10 @@ if(action==='media-pick'){
  }return;
 }
 if(action==='media-choose'){openMediaPicker(el.dataset.field,el.dataset.kind);return}
+if(action==='media-clear'){
+ assignMediaToField(el.dataset.field,'');
+ return;
+}
 if(action==='media-upload-open'){mediaUploadModal();return}
 if(action==='media-edit'){editMedia(eid);return}
 if(action==='media-copy'){
@@ -438,6 +544,8 @@ document.addEventListener('click',e=>{
  if(el.tagName==='BUTTON')e.preventDefault();
  handle(el.dataset.action,el);
 });document.addEventListener('submit',e=>{e.preventDefault();
+if(e.target.querySelector('.media-field.uploading')){toast('Aguarde o upload da imagem terminar antes de salvar.');return;}
+
 if(e.target.id==='media-upload-form'){void submitMediaUpload(e.target);return}
 if(e.target.id==='media-edit-form'){void updateMedia(e.target);return}
 if(e.target.id==='upload-settings-form'){
@@ -458,6 +566,7 @@ if(e.target.id==='settings-form'){const f=new FormData(e.target);db.preferences=
 if(e.target.id==='media-kind-filter'){mediaFilter=e.target.value;refreshMediaResults();return}
 if(e.target.id==='media-tag-filter'){mediaTagFilter=e.target.value;refreshMediaResults();return}
 if(e.target.id==='media-picker-kind'){updateMediaPicker();return}
+if(e.target.matches('.media-inline-file')){void uploadInlineMedia(e.target);return}
 if(e.target.id==='media-picker-file'){
  void uploadFromPicker(e.target.files?.[0]);return;
 }
@@ -489,6 +598,7 @@ document.addEventListener('drop',e=>{
 document.addEventListener('input',e=>{
 if(e.target.id==='media-search'){mediaSearch=e.target.value;refreshMediaResults();return}
 if(e.target.id==='media-picker-search'){updateMediaPicker();return}
+if(e.target.matches('.media-manual-url input[name]')){updateInlineMediaField(e.target.name,e.target.value);return;}
 if(e.target.matches('.media-field [name]')){
  const preview=e.target.closest('.media-field').querySelector('.media-field-preview');
  if(preview)preview.innerHTML=e.target.value?'<img src="'+esc(e.target.value)+'" alt="Prévia">':'<span class="muted">Nenhuma imagem selecionada</span>';

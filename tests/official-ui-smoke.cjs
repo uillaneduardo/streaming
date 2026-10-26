@@ -44,3 +44,21 @@ assert.match(js,/el\.classList\.contains\('media-picker-backdrop'\)&&e\.target!=
 assert.match(css,/\.media-picker-panel/);
 assert.match(css,/\.media-grid/);
 console.log('Mídias, seletor e política de fechamento de modal: OK');
+
+assert.match(js,/function uploadInlineMedia\(/,'Inline form upload');
+assert.match(js,/function uploadProgressRequest\(/,'Real upload progress handler');
+assert.match(js,/new XMLHttpRequest\(\)/,'Browser upload progress events');
+assert.match(js,/xhr\.upload\.onprogress/,'Upload progress feedback');
+assert.match(js,/class="media-inline-thumb"/,'Thumbnail field');
+assert.match(js,/class="media-inline-file"/,'Direct media file input');
+assert.match(js,/media-tile-overlay/,'Thumbnail quick actions');
+assert.match(js,/media-overlay-action/,'Edit and delete image actions');
+for(const id of ['settings-identidade','settings-marca','settings-reproducao','settings-uploads','settings-seguranca']){
+ assert.ok(js.includes(id),'missing settings category: '+id);
+}
+assert.match(css,/\.media-inline-card/);
+assert.match(css,/\.media-tile-overlay/);
+assert.match(css,/\.settings-category/);
+const nginx=fs.readFileSync(path.join(root,'nginx.conf'),'utf8');
+assert.match(nginx,/client_max_body_size 21m/,'Nginx upload limit must match API maximum');
+console.log('Inline uploads, UX and reverse-proxy limit: OK');
