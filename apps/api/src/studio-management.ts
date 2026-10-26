@@ -147,27 +147,32 @@ export function registerStudioManagement(app:FastifyInstance) {
   });
   app.post<{Body:Obj}>("/api/v1/studio/seasons",async(req,reply)=>{
     const actor=await requireActor(req,reply,true);if(!actor)return;
-    const seriesId=req.body?.seriesId,title=txt(req.body?.title,160),number=integer(req.body?.number,1,999);
-    if(!goodId(seriesId)||!title||number===null)return err(reply,400,"invalid_season");
+    const seriesId=req.body?.seriesId,title=txt(req.body?.title,160),number=integer(req.body?.number,1,999),status=req.body?.status??"draft";
+    if(!goodId(seriesId)||!title||number===null||!["draft","published","suspended"].includes(String(status)))return err(reply,400,"invalid_season");
     if(!await seriesPermission(actor,seriesId,"edit"))return err(reply,403,"forbidden");
     if(!(await records("SELECT id FROM series WHERE id=?",[seriesId])).length)return err(reply,404,"series_not_found");
+    if(status==="published"&&!await seriesPermission(actor,seriesId,"publish"))return err(reply,403,"publish_denied");
     if((await records("SELECT id FROM seasons WHERE series_id=? AND number=?",[seriesId,number])).length)return err(reply,409,"season_exists");
     const id=randomUUID();
-    await pool.execute("INSERT INTO seasons(id,series_id,number,title) VALUES(?,?,?,?)",[id,seriesId,number,title]);
+    await pool.execute("INSERT INTO seasons(id,series_id,number,title,status) VALUES(?,?,?,?,?)",[id,seriesId,number,title,status]);
     await audit(actor.id,"season.created","season",id);
     return reply.code(201).send({id});
   });
   app.put<{Params:{id:string};Body:Obj}>("/api/v1/studio/seasons/:id",async(req,reply)=>{
     const actor=await requireActor(req,reply,true);if(!actor)return;
-    const id=req.params.id,title=txt(req.body?.title,160),number=integer(req.body?.number,1,999);
-    if(!goodId(id)||!title||number===null)return err(reply,400,"invalid_season");
-    const old=await records("SELECT series_id FROM seasons WHERE id=? LIMIT 1",[id]);
+    const id=req.params.id,title=txt(req.body?.title,160),number=integer(req.body?.number,1,999),status=req.body?.status;
+    if(!goodId(id)||!title||number===null||(status!==undefined&&!["draft","published","suspended"].includes(String(status))))return err(reply,400,"invalid_season");
+    const old=await records("SELECT series_id,status FROM seasons WHERE id=? LIMIT 1",[id]);
     if(!old.length)return err(reply,404,"season_not_found");
     if(!await seriesPermission(actor,String(old[0].series_id),"edit"))return err(reply,403,"forbidden");
     if(req.body?.seriesId && req.body.seriesId!==old[0].series_id)return err(reply,400,"series_change_not_supported");
+    const nextStatus=status??old[0].status;
+    if((nextStatus==="published"||old[0].status==="published")&&
+       nextStatus!==old[0].status&&!await seriesPermission(actor,String(old[0].series_id),"publish"))
+      return err(reply,403,"publish_denied");
     const dupe=await records("SELECT id FROM seasons WHERE series_id=? AND number=? AND id<>?",[old[0].series_id,number,id]);
     if(dupe.length)return err(reply,409,"season_exists");
-    await pool.execute("UPDATE seasons SET title=?,number=? WHERE id=?",[title,number,id]);
+    await pool.execute("UPDATE seasons SET title=?,number=?,status=? WHERE id=?",[title,number,nextStatus,id]);
     await audit(actor.id,"season.updated","season",id);
     return {ok:true};
   });
