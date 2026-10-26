@@ -294,3 +294,29 @@
 .media-overlay-action .studio-icon{width:17px;height:17px;flex-basis:17px}
 .media-empty-icon .studio-icon{width:30px;height:30px;flex-basis:30px}
 .media-inline-upload-btn .studio-icon,.admin .btn .studio-icon{flex-shrink:0}
+
+/* Editorial catalogue controls use the existing Studio design system. */
+.category-picker{display:flex;flex-direction:column;gap:7px;min-width:0}
+.category-picker>.field{min-width:0}
+.category-picker>button{align-self:flex-start}
+.category-quick-form:not([hidden]){display:flex;gap:8px;flex-wrap:wrap}
+.category-quick-form[hidden]{display:none}
+.category-quick-form .input{flex:1;min-width:140px}
+.category-settings-list{display:grid;gap:8px}
+.category-settings-item{display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+ border:1px solid #e2e6ed;background:#fbfbfc;padding:10px 12px;border-radius:9px}
+.category-settings-item strong{flex:1;min-width:120px}
+.review-history{display:grid;gap:12px;max-height:min(70vh,690px);overflow-y:auto;padding:4px 2px 10px}
+.review-history h3{margin:10px 0 0;font-size:15px}
+.review-history .review-request{display:grid;gap:8px;border:1px solid #dce2eb;background:#fafbfc;padding:14px;border-radius:10px}
+.review-history .review-request .btn{justify-self:start}
+.review-history .textarea{min-height:72px;resize:vertical}
+.review-card{display:grid;gap:8px;border:1px solid #e1e4ea;border-radius:9px;padding:13px}
+.review-card p{margin:2px 0;overflow-wrap:anywhere}
+.review-decision{display:grid;gap:9px}
+.review-decision .row{gap:8px;flex-wrap:wrap}
+.review-version{border:1px solid #e1e4ea;border-radius:8px;padding:10px 12px}
+.review-version summary{cursor:pointer;line-height:1.6}
+.review-json{max-height:240px;overflow:auto;background:#f5f6f8;color:#303744;
+ border-radius:8px;padding:12px;white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px}
+@media(max-width:620px){.review-history{max-height:65vh}.category-settings-item>.btn{flex:0 0 auto}}
