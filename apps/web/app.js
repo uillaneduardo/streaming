@@ -198,10 +198,10 @@ function mediaUploadModal(){
  db.teams.map(t=>'<option value="'+esc(t.id)+'">'+esc(t.name)+'</option>').join('')+'</select></div>':
  '<div class="field"><label>Equipe proprietária</label><select class="select" name="teamId">'+db.teams.map(t=>'<option value="'+esc(t.id)+'">'+esc(t.name)+'</option>').join('')+'</select></div>';
  modal('Enviar mídia','<form id="media-upload-form" class="stack">'+
- '<label class="media-drop"><span>Selecione uma imagem para enviar</span><small>PNG, JPEG, WebP ou GIF · Limite: '+mediaData.settings.maxFileMb+' MB</small>'+
- '<input type="file" name="file" accept="image/png,image/jpeg,image/webp,image/gif" required></label>'+
+ '<label class="media-drop"><span>Arraste imagens aqui ou clique para selecionar</span><small>PNG, JPEG, WebP ou GIF · Limite: '+mediaData.settings.maxFileMb+' MB</small>'+
+ '<input type="file" name="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple required></label>'+
  '<div id="media-upload-preview" class="media-preview">Prévia da imagem aparecerá aqui</div>'+
- '<div class="field"><label>Nome da mídia</label><input class="input" name="name" placeholder="Ex.: Capa da temporada 1" required></div>'+
+ '<div class="field"><label>Nome personalizado (opcional em envio único)</label><input class="input" name="name" placeholder="Use o nome do arquivo se deixar vazio"></div>'+
  '<div class="field"><label>Categoria</label><select name="kind" class="select">'+kinds+'</select></div>'+
  '<div class="field"><label>Tags (separadas por vírgula)</label><input class="input" name="tags" placeholder="destaque, série, temporada"></div>'+
  teams+'<div class="row between"><button class="btn" data-action="close-modal" type="button">Cancelar</button>'+
@@ -243,17 +243,27 @@ async function uploadFromPicker(file){
  }catch(error){if(msg)msg.textContent=error.message;toast(error.message)}
 }
 async function submitMediaUpload(form){
- const fd=new FormData(form),file=fd.get('file');
- if(!(file instanceof File)){toast('Selecione uma imagem.');return}
+ const fd=new FormData(form),files=[...form.elements.file.files];
+ if(!files.length){toast('Selecione pelo menos uma imagem.');return}
+ if(files.length>10){toast('Envie até 10 imagens por vez.');return}
  const btn=form.querySelector('[type="submit"]');if(btn)btn.disabled=true;
- try{
-  const result=await mediaUpload(file,{name:String(fd.get('name')||file.name),kind:String(fd.get('kind')||'other'),
-   teamId:String(fd.get('teamId')||''),tags:String(fd.get('tags')||'')});
-  if(!result)return;
+ let sent=0,failed=[];
+ for(const file of files){
+  try{
+   const result=await mediaUpload(file,{name:files.length===1?(String(fd.get('name')||'')||file.name):file.name,
+    kind:String(fd.get('kind')||'other'),teamId:String(fd.get('teamId')||''),
+    tags:String(fd.get('tags')||'')});
+   if(result)sent++;else failed.push(file.name);
+  }catch(error){failed.push(file.name+': '+error.message)}
+  const preview=document.getElementById('media-upload-preview');
+  if(preview)preview.textContent='Enviados '+sent+' de '+files.length+' arquivos.';
+ }
+ if(sent){
   document.getElementById('modal-root').innerHTML='';
-  render();toast('Upload concluído.');
- }catch(error){toast(error.message)}
- finally{if(btn)btn.disabled=false}
+  render();toast(sent+' imagem(ns) enviada(s).');
+ }
+ if(failed.length)toast('Falha em '+failed.length+' arquivo(s): '+failed[0]);
+ if(btn)btn.disabled=false;
 }
 function editMedia(id){
  const a=mediaData.assets.find(x=>x.id===id);if(!a)return;
@@ -454,16 +464,29 @@ if(e.target.id==='media-picker-file'){
 if(e.target.matches('#media-upload-form input[type="file"]')){
  const file=e.target.files?.[0];if(!file)return;
  const name=e.target.closest('form').elements.name;
- if(name&&!name.value)name.value=file.name.replace(/.[^.]+$/,'');
+ if(name&&!name.value&&e.target.files.length===1)name.value=file.name.replace(/\.[^.]+$/,'');
  const target=document.getElementById('media-upload-preview');
  if(target){
   const url=URL.createObjectURL(file);
-  target.innerHTML='<img src="'+url+'" alt="Prévia do upload">';
+  target.innerHTML='<img src="'+url+'" alt="Prévia do upload"><span class="tiny muted">'+e.target.files.length+' imagem(ns) selecionada(s)</span>';
   target.querySelector('img').addEventListener('load',()=>URL.revokeObjectURL(url),{once:true});
  }
  return;
 }
-if(e.target.id==='public-season'){studioSection=e.target.value;render()}else if(e.target.matches('input[data-action="toggle-section"]'))handle('toggle-section',e.target)});document.addEventListener('input',e=>{
+if(e.target.id==='public-season'){studioSection=e.target.value;render()}else if(e.target.matches('input[data-action="toggle-section"]'))handle('toggle-section',e.target)});document.addEventListener('dragover',e=>{
+  const area=e.target.closest('.media-drop');if(area){e.preventDefault();area.classList.add('drag-over');}
+});
+document.addEventListener('dragleave',e=>{const area=e.target.closest('.media-drop');if(area)area.classList.remove('drag-over')});
+document.addEventListener('drop',e=>{
+  const area=e.target.closest('.media-drop');if(!area)return;
+  e.preventDefault();area.classList.remove('drag-over');
+  const input=area.querySelector('input[type="file"]');
+  if(input&&e.dataTransfer?.files?.length){
+    input.files=e.dataTransfer.files;
+    input.dispatchEvent(new Event('change',{bubbles:true}));
+  }
+});
+document.addEventListener('input',e=>{
 if(e.target.id==='media-search'){mediaSearch=e.target.value;refreshMediaResults();return}
 if(e.target.id==='media-picker-search'){updateMediaPicker();return}
 if(e.target.matches('.media-field [name]')){
