@@ -10,6 +10,18 @@ git checkout main
 git pull --ff-only origin main
 echo "Commit local: $(git rev-parse --short HEAD)"
 sudo docker compose config --quiet
+# Guard against deploying into a fresh empty database volume after a directory or
+# Compose project-name change. A different volume would look like "lost" content.
+if command -v python3 >/dev/null 2>&1; then
+  expected_db_volume="$(sudo docker compose config --format json | python3 -c 'import json,sys; print(json.load(sys.stdin)["volumes"]["cenalivre_db"]["name"])')"
+  previous_db_volumes="$(sudo docker volume ls --filter label=com.docker.compose.volume=cenalivre_db --format '{{.Name}}')"
+  if [[ -n "$previous_db_volumes" ]] && ! grep -Fxq "$expected_db_volume" <<< "$previous_db_volumes"; then
+    echo "ERRO: há outro volume persistente do banco CenaLivre, mas este Compose usaria $expected_db_volume." >&2
+    echo "Volumes existentes: $previous_db_volumes" >&2
+    echo "Confira o diretório/COMPOSE_PROJECT_NAME antes de atualizar. Nada foi recriado." >&2
+    exit 1
+  fi
+fi
 # Rebuild containers from scratch so stale local image layers cannot mask changes.
 sudo docker compose build --no-cache web api
 sudo docker compose up -d db
