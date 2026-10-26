@@ -25,7 +25,7 @@ compose.yml            # web + api + migrate + db
 ### Progresso
 A versão oficial do frontend foi importada do último protótipo aprovado e mantida visualmente inalterada; apenas CSS e JS foram separados do HTML. As imagens estão em `apps/web/assets/` e também funcionam com abertura direta de `apps/web/index.html`.
 
-A API expõe catálogo e disponibilidade com regras de publicação no backend. O portal consulta a API quando servido por HTTP e usa dados fictícios locais como fallback offline. O **Studio ainda é demonstrativo**: suas ações gravam no `localStorage`, não na API. A autenticação, a persistência editorial e o RBAC por equipe serão vinculados nas próximas issues. Não use o Studio atual para gerir conteúdo real.
+A API expõe catálogo e disponibilidade com regras de publicação no backend. O portal consulta a API quando servido por HTTP e usa dados fictícios locais como fallback offline. O Studio já usa autenticação e autorização de equipe/série no backend. A edição de séries é persistente; os outros formulários continuam bloqueados enquanto migram para a API. Demais entidades editoriais ainda serão migradas nas próximas issues. Não use o Studio atual para gerir conteúdo real.
 
 ## Homelab
 ```bash
