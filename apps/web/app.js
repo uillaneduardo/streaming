@@ -193,7 +193,7 @@ function mediaField(label,name,value='',kind='other'){
   '<div class="media-inline-controls"><div class="media-inline-buttons">'+
   '<button type="button" class="btn small" data-action="media-choose" data-field="'+esc(name)+'" data-kind="'+esc(kind)+'">▧ Escolher mídia</button>'+
   '<label class="btn small media-inline-upload-btn">↑ Enviar imagem<input type="file" class="media-inline-file" accept="image/png,image/jpeg,image/webp,image/gif" aria-label="Enviar '+esc(label)+'"></label>'+
-  (value?'<button type="button" class="btn small media-inline-clear" data-action="media-clear" data-field="'+esc(name)+'" aria-label="Limpar seleção">×</button>':'')+'</div>'+
+  '<button type="button" class="btn small media-inline-clear" data-action="media-clear" data-field="'+esc(name)+'" aria-label="Limpar seleção" '+(value?'':'hidden')+'>×</button>'+'</div>'+
   '<small class="media-inline-hint">Imagem do homelab ou já cadastrada na Biblioteca</small></div></div>'+
   '<div class="media-inline-status" role="status" aria-live="polite"></div>'+
   '<progress class="media-inline-progress" max="100" value="0" hidden></progress>'+
@@ -307,42 +307,28 @@ function mediaUploadModal(){
  '<label class="media-drop"><span>Arraste imagens aqui ou clique para selecionar</span><small>PNG, JPEG, WebP ou GIF · Limite: '+mediaData.settings.maxFileMb+' MB</small>'+
  '<input type="file" name="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple required></label>'+
  '<div id="media-upload-preview" class="media-preview">Prévia da imagem aparecerá aqui</div>'+
+ '<progress class="media-batch-progress" max="100" value="0" hidden></progress><p class="muted tiny" id="media-batch-status" role="status" aria-live="polite"></p>'+
  '<div class="field"><label>Nome personalizado (opcional em envio único)</label><input class="input" name="name" placeholder="Use o nome do arquivo se deixar vazio"></div>'+
  '<div class="field"><label>Categoria</label><select name="kind" class="select">'+kinds+'</select></div>'+
  '<div class="field"><label>Tags (separadas por vírgula)</label><input class="input" name="tags" placeholder="destaque, série, temporada"></div>'+
  teams+'<div class="row between"><button class="btn" data-action="close-modal" type="button">Cancelar</button>'+
  '<button class="btn primary" type="submit">Enviar arquivo</button></div></form>');
 }
-async function mediaUpload(file,{name,kind,teamId,tags}){
- if(!file)return;
- const ext=(file.name.split('.').pop()||'').toLowerCase();
- if(!['png','jpg','jpeg','webp','gif'].includes(ext)){toast('Formato não aceito.');return}
- if(file.size>mediaData.settings.maxFileMb*1024*1024){toast('Arquivo excede o limite configurado.');return}
- const request={
-  method:'POST',credentials:'same-origin',
-  headers:{'Content-Type':'application/octet-stream','x-csrf-token':csrfToken,
-   'x-media-name':encodeURIComponent(name||file.name).slice(0,500),'x-media-kind':kind||'other',
-   'x-media-team':teamId||'','x-media-tags':encodeURIComponent(tags||'').slice(0,1000)},
-  body:file
- };
- const response=await fetch('/api/v1/studio/media/upload',request);
- const data=await response.json().catch(()=>({}));
- if(!response.ok)throw new Error(({file_too_large:'Arquivo muito grande',unsupported_file_format:'Formato não permitido',
-   media_limit_reached:'Limite de arquivos atingido',forbidden:'Sem permissão para essa equipe'}[data.error])||data.error||'Falha no upload');
+async function mediaUpload(file,{name,kind,teamId,tags},onProgress){
+ const result=await uploadProgressRequest(file,{name,kind,teamId,tags},onProgress);
  await fetchMedia();
- return data;
+ return result;
 }
 async function uploadFromPicker(file){
  if(!file)return;
- const team=studioUser?.isAdmin?'':db.teams[0]?.id||'';
+ const team=mediaUploadTeam(mediaPickerField||'');
  const msg=document.getElementById('media-picker-feedback');
  if(msg)msg.textContent='Enviando '+file.name+'...';
  try{
-  const result=await mediaUpload(file,{name:file.name,kind:mediaPickerKind==='all'?'other':mediaPickerKind,teamId:team,tags:''});
+  const result=await mediaUpload(file,{name:file.name,kind:mediaPickerKind==='all'?'other':mediaPickerKind,teamId:team,tags:''},percent=>{if(msg)msg.textContent='Enviando '+file.name+' · '+percent+'%';});
   if(!result)return;
   if(mediaPickerField){
-   const target=document.querySelector('#modal-root [name="'+mediaPickerField+'"]')||document.querySelector('#settings-form [name="'+mediaPickerField+'"]');
-   if(target){target.value=result.url;target.dispatchEvent(new Event('input',{bubbles:true}))}
+   assignMediaToField(mediaPickerField,result.url);
    closeMediaPicker();
   }else{updateMediaPicker()}
   toast('Imagem enviada e disponível na Biblioteca.');
@@ -356,9 +342,16 @@ async function submitMediaUpload(form){
  let sent=0,failed=[];
  for(const file of files){
   try{
+   const bar=document.querySelector('#media-upload-form .media-batch-progress');
+   if(bar)bar.hidden=false;
    const result=await mediaUpload(file,{name:files.length===1?(String(fd.get('name')||'')||file.name):file.name,
     kind:String(fd.get('kind')||'other'),teamId:String(fd.get('teamId')||''),
-    tags:String(fd.get('tags')||'')});
+    tags:String(fd.get('tags')||'')},percent=>{
+      const bar=document.querySelector('#media-upload-form .media-batch-progress');
+      const message=document.getElementById('media-batch-status');
+      if(bar)bar.value=(sent*100+percent)/files.length;
+      if(message)message.textContent='Enviando '+file.name+' · '+percent+'% ('+(sent+1)+'/'+files.length+')';
+    });
    if(result)sent++;else failed.push(file.name);
   }catch(error){failed.push(file.name+': '+error.message)}
   const preview=document.getElementById('media-upload-preview');
@@ -380,7 +373,7 @@ function editMedia(id){
  '<option value="'+c.id+'" '+(c.id===a.kind?'selected':'')+'>'+c.title+'</option>').join('')+'</select></div>'+
  '<div class="field"><label>Tags separadas por vírgula</label><input class="input" name="tags" value="'+esc(a.tags.join(', '))+'"></div>'+
  '<div class="field"><label>Substituir arquivo (opcional)</label><input class="input" name="replacement" type="file" accept="image/png,image/jpeg,image/webp,image/gif"><small class="muted">Mantém o mesmo vínculo nas séries e episódios.</small></div>'+
- '<div class="row between"><button type="button" class="btn" data-action="close-modal">Cancelar</button>'+
+ '<p id="media-replace-status" class="muted tiny" role="status" aria-live="polite"></p>'+ '<div class="row between"><button type="button" class="btn" data-action="close-modal">Cancelar</button>'+
  '<button type="submit" class="btn primary">Salvar mídia</button></div></form>');
 }
 async function updateMedia(form){
@@ -391,11 +384,10 @@ async function updateMedia(form){
   const replacement=fd.get('replacement');
   if(replacement instanceof File && replacement.size){
     if(replacement.size>mediaData.settings.maxFileMb*1024*1024)throw new Error('Arquivo maior que o limite configurado.');
-    const response=await fetch('/api/v1/studio/media/'+encodeURIComponent(id)+'/file',{
-      method:'PUT',credentials:'same-origin',headers:{'Content-Type':'application/octet-stream','x-csrf-token':csrfToken},body:replacement
-    });
-    const result=await response.json().catch(()=>({}));
-    if(!response.ok)throw new Error(result.error||'Não foi possível substituir o arquivo');
+    const message=document.getElementById('media-replace-status');
+    await uploadProgressRequest(replacement,{name:replacement.name,kind:String(fd.get('kind')||'other'),teamId:'',tags:''},
+      percent=>{if(message)message.textContent='Substituindo arquivo · '+percent+'%';},
+      'PUT','/api/v1/studio/media/'+encodeURIComponent(id)+'/file');
   }
   await fetchMedia();document.getElementById('modal-root').innerHTML='';render();toast('Mídia atualizada.');
  }catch(error){toast(error.message)}
@@ -519,6 +511,10 @@ if(action==='media-pick'){
  }return;
 }
 if(action==='media-choose'){openMediaPicker(el.dataset.field,el.dataset.kind);return}
+if(action==='media-clear'){
+ assignMediaToField(el.dataset.field,'');
+ return;
+}
 if(action==='media-upload-open'){mediaUploadModal();return}
 if(action==='media-edit'){editMedia(eid);return}
 if(action==='media-copy'){
@@ -564,6 +560,7 @@ if(e.target.id==='settings-form'){const f=new FormData(e.target);db.preferences=
 if(e.target.id==='media-kind-filter'){mediaFilter=e.target.value;refreshMediaResults();return}
 if(e.target.id==='media-tag-filter'){mediaTagFilter=e.target.value;refreshMediaResults();return}
 if(e.target.id==='media-picker-kind'){updateMediaPicker();return}
+if(e.target.matches('.media-inline-file')){void uploadInlineMedia(e.target);return}
 if(e.target.id==='media-picker-file'){
  void uploadFromPicker(e.target.files?.[0]);return;
 }
@@ -595,6 +592,7 @@ document.addEventListener('drop',e=>{
 document.addEventListener('input',e=>{
 if(e.target.id==='media-search'){mediaSearch=e.target.value;refreshMediaResults();return}
 if(e.target.id==='media-picker-search'){updateMediaPicker();return}
+if(e.target.matches('.media-manual-url input[name]')){updateInlineMediaField(e.target.name,e.target.value);return;}
 if(e.target.matches('.media-field [name]')){
  const preview=e.target.closest('.media-field').querySelector('.media-field-preview');
  if(preview)preview.innerHTML=e.target.value?'<img src="'+esc(e.target.value)+'" alt="Prévia">':'<span class="muted">Nenhuma imagem selecionada</span>';
