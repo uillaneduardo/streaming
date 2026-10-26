@@ -5,6 +5,7 @@ import {registerAuth} from "./auth.js";
 import {registerStudio} from "./studio.js";
 import {registerStudioManagement} from "./studio-management.js";
 import {registerStudioBulk} from "./studio-bulk.js";
+import {registerStudioEditorial} from "./studio-editorial.js";
 import {registerMedia} from "./media.js";
 import { publicEpisodeState, sanitizedYoutubeId } from "./domain/release.js";
 
@@ -13,6 +14,7 @@ registerAuth(app);
 registerStudio(app);
 registerStudioManagement(app);
 registerStudioBulk(app);
+registerStudioEditorial(app);
 registerMedia(app);
 type Row = RowDataPacket & Record<string, unknown>;
 const records = async (sql:string):Promise<Row[]> => {
