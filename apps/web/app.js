@@ -200,7 +200,7 @@ function updateMediaPicker(){
 }
 function closeMediaPicker(){document.getElementById('media-picker-root')?.remove();mediaPickerField=null}
 function mediaField(label,name,value='',kind='other'){
- const picture=value?'<img src="'+esc(value)+'" alt="Mídia selecionada">':'<span class="media-empty-icon" aria-hidden="true">${studioIcon('images')}</span>';
+ const picture=value?'<img src="'+esc(value)+'" alt="Mídia selecionada">':'<span class="media-empty-icon" aria-hidden="true">'+studioIcon('images')+'</span>';
  return '<div class="field media-field" data-media-kind="'+esc(kind)+'"><label>'+esc(label)+'</label>'+
   '<div class="media-inline-card"><button type="button" class="media-inline-thumb" data-action="media-choose" data-field="'+esc(name)+'" data-kind="'+esc(kind)+'" aria-label="Escolher '+esc(label)+' da Biblioteca">'+picture+'</button>'+
   '<div class="media-inline-controls"><div class="media-inline-buttons">'+
@@ -240,7 +240,7 @@ function updateInlineMediaField(field,url){
  if(!input)return;
  const card=input.closest('.media-field');if(!card)return;
  const thumb=card.querySelector('.media-inline-thumb');
- if(thumb)thumb.innerHTML=url?'<img src="'+esc(url)+'" alt="Mídia selecionada">':'<span class="media-empty-icon" aria-hidden="true">${studioIcon('images')}</span>';
+ if(thumb)thumb.innerHTML=url?'<img src="'+esc(url)+'" alt="Mídia selecionada">':'<span class="media-empty-icon" aria-hidden="true">'+studioIcon('images')+'</span>';
  const clear=card.querySelector('.media-inline-clear');
  if(clear)clear.hidden=!url;
  const status=card.querySelector('.media-inline-status');
