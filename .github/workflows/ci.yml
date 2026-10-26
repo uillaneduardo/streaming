@@ -100,6 +100,16 @@ jobs:
           node tests/auth-integration.cjs
           node tests/browser-invitations.cjs
           unset BOOTSTRAP_EMAIL BOOTSTRAP_NAME BOOTSTRAP_PASSWORD CI_LOGIN_PASSWORD
+      - name: Upload invitation browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m1-browser-invitations
+          path: |
+            test-results/browser/m1-*.png
+            test-results/browser/FAILED-m1-*.png
+          if-no-files-found: ignore
+          retention-days: 7
       - name: Verify deleted or edited demo content NEVER reappears after migration
         run: |
           # Simulate an existing legacy installation: original catalogue exists,
