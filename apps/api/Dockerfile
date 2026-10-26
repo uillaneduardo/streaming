@@ -11,6 +11,7 @@ WORKDIR /srv
 COPY --from=build /srv/node_modules ./node_modules
 COPY --from=build /srv/dist ./dist
 COPY --from=build /srv/package.json ./package.json
+RUN mkdir -p /srv/media && chown node:node /srv/media
 USER node
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=4s --start-period=25s CMD node -e "fetch('http://127.0.0.1:3000/api/v1/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
