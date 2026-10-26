@@ -24,3 +24,12 @@ Criar autenticação, convite de equipes, grants por série, CRUD granular e upl
 
 ## Atenção YouTube
 YouTube não listado não garante sigilo pré-estreia: o link pode circular fora da plataforma.
+
+
+## M1.1 — Identidade e autorização
+- Sem cadastro público. Criação inicial do administrador ocorre por comando local no container, com credenciais fornecidas em variáveis de ambiente temporárias.
+- Sessão armazenada no MariaDB, cookie HttpOnly, SameSite=Strict, token aleatório e sessões revogáveis. CSRF exigido nas operações autenticadas de escrita.
+- Escopo de séries imposto na API por equipe e grants. Usuário/editor sem grant não edita série de outra equipe.
+- Endpoints autenticados: `/api/v1/auth/login`, `/api/v1/auth/session`, `/api/v1/auth/logout`, `/api/v1/studio/bootstrap`, `/api/v1/studio/users`, `/api/v1/studio/teams/:teamId/members`, `/api/v1/studio/series/:id/grants`, `PUT /api/v1/studio/series/:id`, `POST /api/v1/studio/series/:id/visibility`.
+- Nesta entrega, edição persistente do Studio é **somente edição de séries**; criação de séries, episódios, banners e equipes por interface ficam bloqueadas até os endpoints corretos.
+- Mantenha `COOKIE_SECURE=true` se usar HTTPS externo. Para acesso de teste via HTTP local use `false`, mas nunca disponibilize a autenticação em HTTP público.
