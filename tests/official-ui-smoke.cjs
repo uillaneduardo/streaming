@@ -62,3 +62,16 @@ assert.match(css,/\.settings-category/);
 const nginx=fs.readFileSync(path.join(root,'nginx.conf'),'utf8');
 assert.match(nginx,/client_max_body_size 21m/,'Nginx upload limit must match API maximum');
 console.log('Inline uploads, UX and reverse-proxy limit: OK');
+
+assert.match(js,/frontendVersion=/,'Version status is rendered');
+assert.match(js,/publicLoadState='error'/,'API failures show an error instead of stale demo data');
+assert.match(js,/ensureYouTubeAPI\(/,'Official iframe API is used');
+assert.match(js,/toggleYouTubePlayback\(/,'Minimal play pause control');
+assert.match(js,/player-minimal-bar/,'Compact controls exist');
+assert.match(js,/Próximo episódio/,'Next-episode action belongs to portal');
+assert.match(css,/\.player-minimal-bar/,'Player stylesheet');
+const dockerfile=fs.readFileSync(path.join(root,'Dockerfile'),'utf8');
+assert.match(dockerfile,/version\.json/,'Image includes version manifest');
+assert.match(dockerfile,/\?v=\$\{fingerprint\}/,'HTML uses fingerprinted assets');
+assert.match(nginx,/Cache-Control "no-store, no-cache/,'Nginx must disable caching for app shell');
+console.log('Version handshake, stale catalogue protection and player controls: OK');

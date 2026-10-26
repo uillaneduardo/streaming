@@ -43,3 +43,20 @@ curl -fsS http://localhost:8088/api/v1/public/bootstrap
 Somente o serviço `web` publica uma porta no host. `api` e `db` ficam na rede interna do Docker.
 
 Consulte [docs/FRONTEND_BACKEND.md](docs/FRONTEND_BACKEND.md) e [docs/DEPLOY.md](docs/DEPLOY.md).
+
+
+## Deploy verificável (versão e cache)
+A versão do frontend é calculada no build a partir dos arquivos reais e exposta no rodapé, no Studio e em `/version.json`. Cada build modifica os URLs de CSS e JS, e Nginx desabilita cache dos recursos de entrada.
+
+Para reconstruir de forma limpa e comparar o container em execução com o domínio Cloudflare:
+
+```bash
+cd ~/homelab/apps/streaming
+git checkout main && git pull --ff-only origin main
+bash scripts/deploy-verify.sh
+```
+
+Se o script apontar diferença entre origem e domínio, verifique o endereço de destino no Cloudflare Tunnel e regras de cache; o deploy não altera nenhuma dessas configurações externas. Nunca execute `docker compose down -v` para atualizar.
+
+### Player
+Usa o YouTube IFrame Player API com botão Play/Pause no CenaLivre e controles nativos do YouTube para qualidade, faixas de áudio e legendas **quando disponíveis**. A escolha dessas faixas não é oferecida pela API pública do IFrame; o próximo episódio é comandado exclusivamente na navegação do CenaLivre.
