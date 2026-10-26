@@ -174,6 +174,12 @@ async function call(path,method='GET',body){
     title,category:'Ficção científica',summary:'Testando referências',poster:up.data.url,
     banner:'assets/orbital-banner.svg',featured:false
   })).code,200,'Use uploaded poster in series');
+  const bootstrapWithArtwork=await call('/api/v1/public/bootstrap');
+  assert.equal(bootstrapWithArtwork.code,200);
+  assert.equal(bootstrapWithArtwork.data.series.find(x=>x.id===sid).poster,up.data.url,
+    'Artwork chosen in Studio is used by portal cards');
+  assert.equal(bootstrapWithArtwork.data.series.find(x=>x.id===sid).banner,'assets/orbital-banner.svg',
+    'Portal maintains horizontal banner independent of poster');
   assert.equal((await call('/api/v1/studio/media/'+mediaId,'DELETE')).code,409,'Prevent deletion of referenced asset');
   assert.equal((await fetch('http://localhost:8088/api/v1/media/files/'+mediaId)).status,200,
     'Published series media is public');

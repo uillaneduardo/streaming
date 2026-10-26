@@ -261,3 +261,36 @@
  .admin .modal .form-grid{gap:14px}
  .admin .modal .row.between .btn{flex:1;min-width:110px}
 }
+
+/* Artwork: preserve poster and hero geometry even when a saved image is invalid.
+   These additions affect only media presentation, not the existing color/layout system. */
+.poster-img{background:linear-gradient(145deg,#252935,#12151d)}
+.artwork-placeholder{position:absolute;inset:0;display:grid;place-items:center;font-size:12px;font-weight:900;
+ letter-spacing:1.5px;color:#b8bfcc66;user-select:none;pointer-events:none;text-align:center}
+.poster-img>.poster-image{position:absolute;inset:0;display:block;width:100%;height:100%;object-fit:cover;z-index:1}
+.poster-img .tag{z-index:2}
+.artwork-unavailable{display:none!important}
+.hero{isolation:isolate}
+.hero .hero-artwork{position:absolute;inset:0;z-index:0;overflow:hidden;background:linear-gradient(120deg,#222635,#101218)}
+.hero .hero-artwork-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.hero .hero-artwork-placeholder{position:absolute;inset:0;display:grid;place-items:center;pointer-events:none;
+ color:#ffffff0d;font-size:clamp(36px,8vw,90px);font-weight:900;letter-spacing:-3px}
+.hero:before{background:linear-gradient(90deg,#0b0d13 0%,#0b0d13da 32%,#0b0d1330 100%),
+ linear-gradient(0deg,#0b0d13bd,transparent 65%);z-index:1}
+.hero>.hero-content{position:relative;z-index:2}
+.series-poster-wrap{width:100%;aspect-ratio:2/3;position:relative;background:linear-gradient(145deg,#252935,#141720);
+ border-radius:14px;overflow:hidden}
+.series-poster-wrap>.series-poster{position:absolute;inset:0;width:100%;height:100%;margin:0;border-radius:0;object-fit:cover}
+.home-episode-image{width:100%;aspect-ratio:16/9;position:relative;overflow:hidden;background:#252835}
+.home-episode-image>.home-episode-img{display:block;position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.home-episode-image>.artwork-placeholder{font-size:10px}
+@media(max-width:720px){.hero:before{background:linear-gradient(0deg,#0b0d13 4%,#0b0d1370 95%)}}
+
+/* Studio-only standardized Lucide line-icon sizing. Other UI elements unchanged. */
+.studio-icon{display:inline-block;width:18px;height:18px;flex:0 0 18px;vertical-align:middle;
+ stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.side-icon{width:21px;min-width:21px;display:grid;place-items:center}
+.sidebar .side-link{gap:11px}
+.media-overlay-action .studio-icon{width:17px;height:17px;flex-basis:17px}
+.media-empty-icon .studio-icon{width:30px;height:30px;flex-basis:30px}
+.media-inline-upload-btn .studio-icon,.admin .btn .studio-icon{flex-shrink:0}

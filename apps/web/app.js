@@ -90,6 +90,13 @@ async function saveRemoteEntity(form){
       if(!id)payload.teamIds=f.getAll('teamIds');
       if(!id)payload.visibility=studioUser?.isAdmin?pick('visibility')||'draft':'draft';
       if(!id&&!payload.teamIds.length){toast('Escolha ao menos uma equipe responsável.');return;}
+    }else if(type==='series-artwork'){
+      const series=by('series',id);
+      if(!series){toast('Série não encontrada.');return;}
+      path='/api/v1/studio/series/'+encodeURIComponent(id);
+      payload={title:series.title,category:series.category,summary:series.summary,
+        poster:pick('poster'),banner:pick('banner')};
+      if(studioUser?.isAdmin)payload.featured=Boolean(series.featured);
     }else if(type==='teams'){
       path='/api/v1/studio/teams'+(id?'/'+encodeURIComponent(id):'');
       payload={name:pick('name'),description:pick('description')};
@@ -158,28 +165,28 @@ const mediaFilterItems=(items,search,kind,tag)=>items.filter(a=>
 const mediaCard=(a,picker=false)=>'<article class="media-card"><div class="media-image media-tile">'+
  '<img src="'+esc(a.url)+'" alt="'+esc(a.name)+'" loading="lazy">'+
  (picker?'':'<div class="media-tile-overlay" aria-label="Ações da mídia">'+
- '<button class="media-overlay-action" type="button" data-action="media-edit" data-id="'+esc(a.id)+'" title="Editar '+esc(a.name)+'" aria-label="Editar '+esc(a.name)+'">✎</button>'+
- '<button class="media-overlay-action danger" type="button" data-action="media-delete" data-id="'+esc(a.id)+'" title="Excluir '+esc(a.name)+'" aria-label="Excluir '+esc(a.name)+'">×</button></div>')+'</div>'+
+ '<button class="media-overlay-action" type="button" data-action="media-edit" data-id="'+esc(a.id)+'" title="Editar '+esc(a.name)+'" aria-label="Editar '+esc(a.name)+'">'+studioIcon('pencil')+'</button>'+
+ '<button class="media-overlay-action danger" type="button" data-action="media-delete" data-id="'+esc(a.id)+'" title="Excluir '+esc(a.name)+'" aria-label="Excluir '+esc(a.name)+'">'+studioIcon('x')+'</button></div>')+'</div>'+
  '<strong title="'+esc(a.name)+'">'+esc(a.name)+'</strong>'+
  '<div class="media-meta">'+mediaName(a.kind)+' · '+(a.size/1048576).toFixed(2)+' MB</div>'+
  '<div class="media-tags">'+a.tags.map(t=>'<span class="media-tag">'+esc(t)+'</span>').join('')+'</div>'+
  '<div class="media-actions">'+(picker?
  '<button type="button" class="btn small primary" data-action="media-pick" data-id="'+esc(a.id)+'">Selecionar</button>':
- '<button type="button" class="btn small" data-action="media-edit" data-id="'+esc(a.id)+'">Editar</button>'+
- '<button type="button" class="btn small" data-action="media-copy" data-id="'+esc(a.id)+'">Copiar URL</button>'+
- '<button type="button" class="btn small" data-action="media-download" data-id="'+esc(a.id)+'">Baixar</button>')+'</div></article>';
+ '<button type="button" class="btn small" data-action="media-edit" data-id="'+esc(a.id)+'">'+studioIcon('pencil')+' Editar</button>'+
+ '<button type="button" class="btn small" data-action="media-copy" data-id="'+esc(a.id)+'">'+studioIcon('copy')+' Copiar URL</button>'+
+ '<button type="button" class="btn small" data-action="media-download" data-id="'+esc(a.id)+'">'+studioIcon('download')+' Baixar</button>')+'</div></article>';
 function openMediaPicker(field,kind){
  mediaPickerField=field;mediaPickerKind=kind||'all';
  let root=document.getElementById('media-picker-root');
  if(!root){root=document.createElement('div');root.id='media-picker-root';document.body.append(root)}
  root.innerHTML='<div class="media-picker-backdrop" data-action="media-picker-close">'+
  '<div class="media-picker-panel form-surface-light" role="dialog" aria-modal="true" aria-label="Escolher mídia">'+
- '<div class="row between"><h2>Escolher mídia</h2><button class="btn small" data-action="media-picker-close">✕</button></div>'+
+ '<div class="row between"><h2>Escolher mídia</h2><button class="btn small" data-action="media-picker-close" aria-label="Fechar">'+studioIcon('x')+'</button></div>'+
  '<p class="muted">Selecione uma imagem já enviada ou envie um novo arquivo.</p>'+
  '<div class="media-toolbar"><input class="input" id="media-picker-search" placeholder="Pesquisar por nome ou tag">'+
  '<select class="select" id="media-picker-kind">'+
  '<option value="all">Todos os tipos</option>'+mediaCategories.map(c=>'<option value="'+c.id+'" '+(c.id===mediaPickerKind?'selected':'')+'>'+c.title+'</option>').join('')+
- '</select><label class="btn primary media-file-btn">+ Enviar imagem<input type="file" id="media-picker-file" accept="image/png,image/jpeg,image/webp,image/gif" hidden></label></div>'+
+ '</select><label class="btn primary media-file-btn">'+studioIcon('upload')+' Enviar imagem<input type="file" id="media-picker-file" accept="image/png,image/jpeg,image/webp,image/gif" hidden></label></div>'+
  '<div class="media-grid" id="media-picker-grid"></div>'+
  '<p id="media-picker-feedback" class="muted tiny"></p></div></div>';
  updateMediaPicker();
@@ -193,13 +200,13 @@ function updateMediaPicker(){
 }
 function closeMediaPicker(){document.getElementById('media-picker-root')?.remove();mediaPickerField=null}
 function mediaField(label,name,value='',kind='other'){
- const picture=value?'<img src="'+esc(value)+'" alt="Mídia selecionada">':'<span class="media-empty-icon" aria-hidden="true">▧</span>';
+ const picture=value?'<img src="'+esc(value)+'" alt="Mídia selecionada">':'<span class="media-empty-icon" aria-hidden="true">'+studioIcon('images')+'</span>';
  return '<div class="field media-field" data-media-kind="'+esc(kind)+'"><label>'+esc(label)+'</label>'+
   '<div class="media-inline-card"><button type="button" class="media-inline-thumb" data-action="media-choose" data-field="'+esc(name)+'" data-kind="'+esc(kind)+'" aria-label="Escolher '+esc(label)+' da Biblioteca">'+picture+'</button>'+
   '<div class="media-inline-controls"><div class="media-inline-buttons">'+
-  '<button type="button" class="btn small" data-action="media-choose" data-field="'+esc(name)+'" data-kind="'+esc(kind)+'">▧ Escolher mídia</button>'+
-  '<label class="btn small media-inline-upload-btn">↑ Enviar imagem<input type="file" class="media-inline-file" accept="image/png,image/jpeg,image/webp,image/gif" aria-label="Enviar '+esc(label)+'"></label>'+
-  '<button type="button" class="btn small media-inline-clear" data-action="media-clear" data-field="'+esc(name)+'" aria-label="Limpar seleção" '+(value?'':'hidden')+'>×</button>'+'</div>'+
+  '<button type="button" class="btn small" data-action="media-choose" data-field="'+esc(name)+'" data-kind="'+esc(kind)+'">'+studioIcon('images')+' Escolher mídia</button>'+
+  '<label class="btn small media-inline-upload-btn">'+studioIcon('upload')+' Enviar imagem<input type="file" class="media-inline-file" accept="image/png,image/jpeg,image/webp,image/gif" aria-label="Enviar '+esc(label)+'"></label>'+
+  '<button type="button" class="btn small media-inline-clear" data-action="media-clear" data-field="'+esc(name)+'" aria-label="Limpar seleção" '+(value?'':'hidden')+'>'+studioIcon('x')+'</button>'+'</div>'+
   '<small class="media-inline-hint">Escolha uma imagem existente ou envie outra.</small></div></div>'+
   '<div class="media-inline-status" role="status" aria-live="polite"></div>'+
   '<progress class="media-inline-progress" max="100" value="0" hidden></progress>'+
@@ -216,7 +223,7 @@ function mediaUploadTeam(field){
  const input=Array.from(document.querySelectorAll('#modal-root [name],#settings-form [name]')).find(x=>x.name===field);
  const form=input?.closest('form');
  let ids=[];
- if(form?.dataset.form==='series'){
+ if(['series','series-artwork'].includes(form?.dataset.form)){
   ids=Array.from(form.querySelectorAll('[name="teamIds"]:checked')).map(x=>x.value);
   if(!ids.length){const existing=db.series.find(x=>x.id===form.dataset.id);ids=existing?.teamIds||[];}
  }else if(form?.dataset.form==='episodes'){
@@ -233,7 +240,7 @@ function updateInlineMediaField(field,url){
  if(!input)return;
  const card=input.closest('.media-field');if(!card)return;
  const thumb=card.querySelector('.media-inline-thumb');
- if(thumb)thumb.innerHTML=url?'<img src="'+esc(url)+'" alt="Mídia selecionada">':'<span class="media-empty-icon" aria-hidden="true">▧</span>';
+ if(thumb)thumb.innerHTML=url?'<img src="'+esc(url)+'" alt="Mídia selecionada">':'<span class="media-empty-icon" aria-hidden="true">'+studioIcon('images')+'</span>';
  const clear=card.querySelector('.media-inline-clear');
  if(clear)clear.hidden=!url;
  const status=card.querySelector('.media-inline-status');
@@ -416,17 +423,35 @@ let catalogView=localStorage.getItem('cenalivre-catalog-view')==='list'?'list':'
 let route={},filterCategory='Todas',searchTerm='',studioSection='';const nav=(path)=>{location.hash=path;window.scrollTo(0,0)};const parse=()=>{let p=location.hash.slice(1)||'/';route={path:p,parts:p.split('/').filter(Boolean),studio:p.startsWith('/studio')};if(!p.startsWith('/assistir/'))activeVideo=null};let activeVideo=null;
 function toast(msg){const el=document.getElementById('toast-root');el.innerHTML=`<div class="toast">${esc(msg)}</div>`;setTimeout(()=>{if(el)el.innerHTML=''},3000)}
 function publicNav(){return `<header class="public-nav"><a class="brand" href="#/">${db.preferences?.logoUrl?`<img class="site-logo" src="${esc(db.preferences.logoUrl)}" alt="${esc(db.preferences.siteName||"CenaLivre")}">`:"CENA<em>LIVRE</em>"}</a><a class="nav-link ${route.path==='/'?'active':''}" href="#/">Início</a><a class="nav-link ${route.path.startsWith('/explorar')?'active':''}" href="#/explorar">Explorar</a><a class="nav-link" href="#/explorar?cat=Documentário">Documentários</a><div class="nav-fill"></div><button class="btn ghost small" data-action="go-studio">◧ &nbsp; Studio</button></header>`}
-function poster(s){return `<a href="#/serie/${esc(s.id)}" class="poster-card"><div class="poster-img" style="background-image:${heroImg(s.poster)}"><span class="tag">${esc(s.category)}</span></div><div class="poster-title">${esc(s.title)}</div><div class="poster-sub">${seasons(s.id).length} temporada(s) · ${epOrder(s.id).length} episódio(s)</div><p class="poster-description">${esc(s.summary)}</p></a>`}
+// A broken reference cannot leave an empty poster-sized block. Try the series banner
+// before showing a branded neutral placeholder; no inaccessible media is made public.
+function artworkImage(src,fallback,alt,className){
+ const first=String(src||'').trim(),backup=String(fallback||'').trim();
+ const candidates=[first,backup].filter((v,i,arr)=>v&&arr.indexOf(v)===i);
+ return candidates.length?
+  '<img class="'+className+'" src="'+esc(candidates[0])+'" alt="'+esc(alt)+'" '+(className==='hero-artwork-img'?'':'loading="lazy" ')+
+  (candidates[1]?'data-artwork-fallback="'+esc(candidates[1])+'" ':'')+
+  (className==='hero-artwork-img'?'loading="eager" fetchpriority="high" ':'')+
+  'data-artwork-kind="'+esc(className)+'">':
+  '';
+}
+function poster(s){return `<a href="#/serie/${esc(s.id)}" class="poster-card"><div class="poster-img">
+ <span class="artwork-placeholder" aria-hidden="true">CENALIVRE</span>
+ ${artworkImage(s.poster,s.banner,'Pôster de '+s.title,'poster-image')}
+ <span class="tag">${esc(s.category)}</span></div><div class="poster-title">${esc(s.title)}</div>
+ <div class="poster-sub">${seasons(s.id).length} temporada(s) · ${epOrder(s.id).length} episódio(s)</div>
+ <p class="poster-description">${esc(s.summary)}</p></a>`}
 function cardGrid(items){return items.length?`<div class="grid-cards ${catalogView==='list'?'list-cards':''}">${items.map(poster).join('')}</div>`:`<div class="empty">Nenhuma produção encontrada.</div>`}
 function viewSwitch(){return `<div class="view-switch" role="group" aria-label="Modo de visualização"><button class="view-option ${catalogView==='grid'?'selected':''}" data-action="catalog-view" data-view="grid" aria-pressed="${catalogView==='grid'}" title="Visualização em grade">▦ <span>Grade</span></button><button class="view-option ${catalogView==='list'?'selected':''}" data-action="catalog-view" data-view="list" aria-pressed="${catalogView==='list'}" title="Visualização em lista">☷ <span>Lista</span></button></div>`}
 function bannerActive(b){return b.active&&(!b.startAt||new Date(b.startAt)<=new Date())&&(!b.endAt||new Date(b.endAt)>new Date())}
 function homeSwitch(){return `<div class="view-switch" role="group" aria-label="Visualização da página inicial"><button class="view-option ${homeView==='grid'?'selected':''}" data-action="home-view" data-view="grid" aria-pressed="${homeView==='grid'}" title="Exibir em grade">▦ <span>Grade</span></button><button class="view-option ${homeView==='list'?'selected':''}" data-action="home-view" data-view="list" aria-pressed="${homeView==='list'}" title="Exibir em lista">☷ <span>Lista</span></button></div>`}
 function homePosters(items){return items.length?`<div class="grid-cards ${homeView==='list'?'list-cards':''}">${items.map(poster).join('')}</div>`:`<div class="empty">Nenhuma produção encontrada.</div>`}
-function homeEpisodes(items){return items.length?`<div class="home-episodes ${homeView==='list'?'home-episodes-list':''}">${items.map(e=>{const s=seriesForEpisode(e),se=by('seasons',e.seasonId),available=playable(e);return `<button class="home-episode" data-action="${available?'watch':'go-series'}" data-id="${available?e.id:s?.id}"><img loading="lazy" src="${esc(e.thumbnail)}" alt="Thumbnail de ${esc(e.title)}"><div class="home-episode-body"><span class="muted tiny">${esc(s?.title||'Série')} · T${se?.number}:E${e.number}</span><strong>${esc(e.title)}</strong><p>${esc(e.summary)}</p><span class="tiny">${available?'▶ Assistir agora':'◷ Estreia '+dt(e.releaseAt)}</span></div></button>`}).join('')}</div>`:`<div class="empty">Nenhum episódio nesta seção.</div>`}
-function home(){let b=[...db.banners].sort((a,z)=>a.order-z.order).find(bannerActive),s=by('series',b?.target)||db.series.find(x=>x.featured)||db.series[0];const featured=s||db.series[0];let out=`<div class="container"><section class="hero" style="--hero-image:${heroImg(b?.image||featured.banner)}"><div class="hero-content"><div class="eyebrow">✦ Histórias independentes</div><h1>${esc(b?.title||featured.title)}</h1><p>${esc(b?.subtitle||featured.summary)}</p><div class="actions"><button class="btn primary" data-action="go-series" data-id="${esc(featured.id)}">▶ &nbsp; Conhecer série</button><a href="#/explorar" class="btn">Explorar catálogo →</a></div></div></section><div class="row between home-viewbar"><span class="muted tiny">Visualização das seções</span>${homeSwitch()}</div>`;for(const section of db.homeSections.filter(x=>x.active)){let title=section.title;if(section.kind==='featured'){out+=`<div class="section-head"><h2>${esc(title)}</h2></div>${homePosters(db.series.filter(s=>s.featured))}`;}else if(section.kind==='all'){out+=`<div class="section-head"><h2>${esc(title)}</h2><a href="#/explorar" class="muted tiny">Ver todas →</a></div>${homePosters(db.series)}`;}else if(section.kind==='latest'){let e=db.episodes.filter(playable).sort((a,b)=>new Date(b.releaseAt)-new Date(a.releaseAt)).slice(0,4);out+=`<div class="section-head"><h2>${esc(title)}</h2></div>${homeEpisodes(e)}`;}else if(section.kind==='upcoming'){const e=db.episodes.filter(x=>state(x)==='Em breve').sort((a,b)=>new Date(a.releaseAt)-new Date(b.releaseAt)).slice(0,4);out+=`<div class="section-head"><h2>${esc(title)}</h2></div>${homeEpisodes(e)}`;}}return out+'</div>'}
+function homeEpisodes(items){return items.length?`<div class="home-episodes ${homeView==='list'?'home-episodes-list':''}">${items.map(e=>{const s=seriesForEpisode(e),se=by('seasons',e.seasonId),available=playable(e);return `<button class="home-episode" data-action="${available?'watch':'go-series'}" data-id="${available?e.id:s?.id}"><div class="home-episode-image"><span class="artwork-placeholder">CENALIVRE</span>${artworkImage(e.thumbnail,s?.banner||s?.poster,'Thumbnail de '+e.title,'home-episode-img')}</div><div class="home-episode-body"><span class="muted tiny">${esc(s?.title||'Série')} · T${se?.number}:E${e.number}</span><strong>${esc(e.title)}</strong><p>${esc(e.summary)}</p><span class="tiny">${available?'▶ Assistir agora':'◷ Estreia '+dt(e.releaseAt)}</span></div></button>`}).join('')}</div>`:`<div class="empty">Nenhum episódio nesta seção.</div>`}
+function home(){if(!db.series.length)return '<div class="container"><div class="empty">Ainda não há séries publicadas.</div></div>';
+let b=[...db.banners].sort((a,z)=>a.order-z.order).find(bannerActive),s=by('series',b?.target)||db.series.find(x=>x.featured)||db.series[0];const featured=s||db.series[0];let out=`<div class="container"><section class="hero"><div class="hero-artwork" aria-hidden="true"><span class="hero-artwork-placeholder">CENALIVRE</span>${artworkImage(b?.image||featured.banner,b?.image?featured.banner:featured.poster,'Banner de '+featured.title,'hero-artwork-img')}</div><div class="hero-content"><div class="eyebrow">✦ Histórias independentes</div><h1>${esc(b?.title||featured.title)}</h1><p>${esc(b?.subtitle||featured.summary)}</p><div class="actions"><button class="btn primary" data-action="go-series" data-id="${esc(featured.id)}">▶ &nbsp; Conhecer série</button><a href="#/explorar" class="btn">Explorar catálogo →</a></div></div></section><div class="row between home-viewbar"><span class="muted tiny">Visualização das seções</span>${homeSwitch()}</div>`;for(const section of db.homeSections.filter(x=>x.active)){let title=section.title;if(section.kind==='featured'){out+=`<div class="section-head"><h2>${esc(title)}</h2></div>${homePosters(db.series.filter(s=>s.featured))}`;}else if(section.kind==='all'){out+=`<div class="section-head"><h2>${esc(title)}</h2><a href="#/explorar" class="muted tiny">Ver todas →</a></div>${homePosters(db.series)}`;}else if(section.kind==='latest'){let e=db.episodes.filter(playable).sort((a,b)=>new Date(b.releaseAt)-new Date(a.releaseAt)).slice(0,4);out+=`<div class="section-head"><h2>${esc(title)}</h2></div>${homeEpisodes(e)}`;}else if(section.kind==='upcoming'){const e=db.episodes.filter(x=>state(x)==='Em breve').sort((a,b)=>new Date(a.releaseAt)-new Date(b.releaseAt)).slice(0,4);out+=`<div class="section-head"><h2>${esc(title)}</h2></div>${homeEpisodes(e)}`;}}return out+'</div>'}
 function explore(){let p=new URLSearchParams(route.path.split('?')[1]||''),cat=p.get('cat');if(cat&&!searchTerm)filterCategory=cat;const cats=['Todas',...new Set(db.series.map(x=>x.category))];let list=db.series.filter(x=>(filterCategory==='Todas'||x.category===filterCategory)&&`${x.title} ${x.summary} ${x.category}`.toLowerCase().includes(searchTerm.toLowerCase()));return `<div class="container"><div class="section-head" style="margin-top:14px"><div><div class="eyebrow">Catálogo aberto</div><h1 style="font-size:36px;margin:8px 0">Explore as séries</h1><p class="muted">Produções originais e independentes, gratuitas para assistir.</p></div></div><div class="row" style="margin:25px 0"><input id="public-search" class="input searchbar" placeholder="Buscar séries, histórias ou categorias..." value="${esc(searchTerm)}"></div><div class="pillset" style="margin-bottom:25px">${cats.map(c=>`<button class="pill ${filterCategory===c?'active':''}" data-action="filter-cat" data-cat="${esc(c)}">${esc(c)}</button>`).join('')}</div><div class="row between" style="margin:12px 0 20px"><span class="muted tiny">${list.length} série(s)</span>${viewSwitch()}</div><div id="explore-results">${cardGrid(list)}</div></div>`}
 function epPublicRow(e){const s=seriesForEpisode(e),se=by('seasons',e.seasonId),available=playable(e);return `<button class="episode-row" data-action="${available?'watch':'go-series'}" data-id="${available?e.id:s?.id}"><img class="episode-img" loading="lazy" src="${esc(e.thumbnail)}" alt=""><div class="episode-meta"><strong>${esc(s?.title||'Série')} · T${se?.number}:E${e.number} — ${esc(e.title)}</strong><p>${esc(e.summary)}</p><span class="muted tiny">${e.duration||'?'} min · ${available?'Disponível agora':state(e)==='Em breve'?'Estreia '+dt(e.releaseAt):state(e)}</span></div><span class="tag">${available?'▶ Assistir':state(e)}</span></button>`}
-function seriesPage(sid){const s=by('series',sid);if(!s)return missing();const list=seasons(sid),defaultSe=list[0],currentSe=list.find(x=>x.id===studioSection)||defaultSe;return `<div class="container"><a class="muted tiny" href="#/explorar">← Voltar ao catálogo</a><div class="series-hero"><img class="series-poster" src="${esc(s.poster)}" alt="Pôster de ${esc(s.title)}"><div><div class="eyebrow">${esc(s.category)} · Produção original</div><h1>${esc(s.title)}</h1><p>${esc(s.summary)}</p><div class="row" style="flex-wrap:wrap"><span class="tag">${list.length} temporada(s)</span><span class="tag">${epOrder(sid).length} episódio(s)</span><span class="tag">Gratuito</span></div><div class="actions"><button class="btn primary" data-action="watch" data-id="${esc(epOrder(sid).find(playable)?.id||'')}" ${epOrder(sid).some(playable)?'':'disabled'}>▶ Assistir primeiro disponível</button><button class="btn" data-action="fav" data-id="${esc(sid)}">${db.saved.includes(sid)?'✓ Na minha lista':'＋ Minha lista'}</button></div></div></div><div class="section-head"><h2>Episódios</h2><select id="public-season" class="select" style="max-width:230px">${list.map(x=>`<option value="${x.id}" ${x.id===currentSe?.id?'selected':''}>Temporada ${x.number} — ${esc(x.title)}</option>`).join('')}</select></div><div class="episode-list">${(currentSe?eps(currentSe.id):[]).map(epPublicRow).join('')}</div></div>`}
+function seriesPage(sid){const s=by('series',sid);if(!s)return missing();const list=seasons(sid),defaultSe=list[0],currentSe=list.find(x=>x.id===studioSection)||defaultSe;return `<div class="container"><a class="muted tiny" href="#/explorar">← Voltar ao catálogo</a><div class="series-hero"><div class="series-poster-wrap"><span class="artwork-placeholder">CENALIVRE</span>${artworkImage(s.poster,s.banner,'Pôster de '+s.title,'series-poster')}</div><div><div class="eyebrow">${esc(s.category)} · Produção original</div><h1>${esc(s.title)}</h1><p>${esc(s.summary)}</p><div class="row" style="flex-wrap:wrap"><span class="tag">${list.length} temporada(s)</span><span class="tag">${epOrder(sid).length} episódio(s)</span><span class="tag">Gratuito</span></div><div class="actions"><button class="btn primary" data-action="watch" data-id="${esc(epOrder(sid).find(playable)?.id||'')}" ${epOrder(sid).some(playable)?'':'disabled'}>▶ Assistir primeiro disponível</button><button class="btn" data-action="fav" data-id="${esc(sid)}">${db.saved.includes(sid)?'✓ Na minha lista':'＋ Minha lista'}</button></div></div></div><div class="section-head"><h2>Episódios</h2><select id="public-season" class="select" style="max-width:230px">${list.map(x=>`<option value="${x.id}" ${x.id===currentSe?.id?'selected':''}>Temporada ${x.number} — ${esc(x.title)}</option>`).join('')}</select></div><div class="episode-list">${(currentSe?eps(currentSe.id):[]).map(epPublicRow).join('')}</div></div>`}
 // YouTube IFrame API: play/pause can be controlled externally. Quality, audio and captions
 // stay in the native YouTube menu, because they are not exposed as full track selectors.
 let ytApiPromise=null,ytPlayer=null,ytMountedEpisode='';
@@ -504,11 +529,49 @@ function watchPage(eid){
  <div class="episode-list">${seq.map(epPublicRow).join('')}</div></div>`;
 }
 function missing(){return `<div class="container"><h1>Conteúdo não encontrado</h1><a class="btn" href="#/">Voltar ao início</a></div>`}
-const sideItems=[['dashboard','▦','Visão geral'],['series','▤','Séries'],['seasons','▥','Temporadas'],['episodes','▷','Episódios'],['media','▧','Biblioteca de mídia'],['schedule','◷','Calendário editorial'],['homepage','◈','CMS da página inicial'],['teams','♧','Equipes e permissões'],['settings','⚙','Configurações']];function side(){return `<aside class="sidebar" id="sidebar"><div class="row between"><div class="brand">CENA<em>LIVRE</em><div class="muted tiny" style="letter-spacing:0;font-weight:500">Studio</div></div><button class="btn small mobile-side-close" data-action="toggle-side">✕</button></div><div class="sidebar-label">Operação editorial</div>${sideItems.map(([p,ic,t])=>`<button data-action="route" data-path="/studio/${p}" class="side-link ${route.parts[1]===p?'active':''}"><span style="font-size:17px;width:21px">${ic}</span>${t}</button>`).join('')}<div class="sidebar-label">Plataforma</div><button class="side-link" data-action="route" data-path="/">↗ &nbsp; Visitar portal</button><button class="side-link" data-action="${hosted?'logout':'reset'}">${hosted?'⇥ &nbsp; Sair do Studio':'↻ &nbsp; Restaurar dados'}</button></aside>`}
-function studioFrame(content){return `<div class="admin">${side()}<div class="admin-main"><div class="admin-top"><button class="btn small mobile-menu" data-action="toggle-side">☰</button><strong style="font-size:13px">Studio</strong><div style="flex:1"></div><button class="btn small" data-action="route" data-path="/">Ver portal ↗</button></div><main class="admin-content">${content}</main></div></div>`}
+// One coherent icon system for Studio only: Lucide-style 24px line icons.
+// All icons use the same stroke, joins, cap and viewbox; no external CDN needed.
+const studioIconShapes={
+ 'layout-dashboard':'<rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/>',
+ 'clapperboard':'<path d="M4 11h16v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-9Zm0 0-1-4a2 2 0 0 1 1.5-2.4L17 2a2 2 0 0 1 2.4 1.5L20 7l-16 4ZM5 5l4 5M11 4l4 5M17 3l3 4"/>',
+ 'layers':'<path d="m12 2 9 5-9 5-9-5 9-5Zm-9 10 9 5 9-5M3 17l9 5 9-5"/>',
+ 'play':'<polygon points="6 3 20 12 6 21 6 3"/>',
+ 'images':'<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/>',
+ 'calendar-days':'<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M8 2v4M16 2v4M3 10h18M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/>',
+ 'panels-top-left':'<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 9v12"/>',
+ 'users':'<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M16 3.2a4 4 0 0 1 0 7.6M22 21v-2a4 4 0 0 0-3-3.87"/><circle cx="9" cy="7" r="4"/>',
+ 'settings':'<path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Zm7.4 4.8a7.9 7.9 0 0 0 0-1.6l2-1.5-2-3.4-2.3.9a7.9 7.9 0 0 0-1.4-.8L15.3 4h-4l-.4 2.4a7.9 7.9 0 0 0-1.4.8l-2.3-.9-2 3.4 2 1.5a7.9 7.9 0 0 0 0 1.6l-2 1.5 2 3.4 2.3-.9a7.9 7.9 0 0 0 1.4.8l.4 2.4h4l.4-2.4a7.9 7.9 0 0 0 1.4-.8l2.3.9 2-3.4-2-1.5Z" transform="translate(-1 -0.5)"/>',
+ 'external-link':'<path d="M15 3h6v6M10 14 21 3M21 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h6"/>',
+ 'log-out':'<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>',
+ 'rotate-ccw':'<path d="M3 11a9 9 0 1 1 2.7 6.4M3 3v8h8"/>',
+ 'menu':'<path d="M4 6h16M4 12h16M4 18h16"/>',
+ 'x':'<path d="M18 6 6 18M6 6l12 12"/>',
+ 'plus':'<path d="M12 5v14M5 12h14"/>',
+ 'pencil':'<path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z"/>',
+ 'trash-2':'<path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M6 6l1 15h10l1-15M10 10v7M14 10v7"/>',
+ 'upload':'<path d="M12 16V3M7 8l5-5 5 5M3 16v3a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-3"/>',
+ 'download':'<path d="M12 3v12m-5-5 5 5 5-5M4 17v3h16v-3"/>',
+ 'copy':'<rect x="8" y="8" width="13" height="13" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/>',
+ 'arrow-up':'<path d="M12 19V5m-7 7 7-7 7 7"/>',
+ 'arrow-down':'<path d="M12 5v14m-7-7 7 7 7-7"/>',
+ 'arrow-right':'<path d="M5 12h14m-7-7 7 7-7 7"/>',
+ 'eye':'<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/>',
+ 'check':'<path d="m5 12 4 4L19 6"/>',
+ 'search':'<circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/>',
+ 'grid-2x2':'<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
+ 'list':'<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
+ 'image-plus':'<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m3 19 6-6 3 3 3-3 6 6M16 7h4M18 5v4"/>',
+ 'filter':'<path d="M4 7h16M7 12h10M10 17h4"/>'
+};
+function studioIcon(name){
+ return '<svg class="studio-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">'+
+  (studioIconShapes[name]||studioIconShapes['images'])+'</svg>';
+}
+const sideItems=[['dashboard','layout-dashboard','Visão geral'],['series','clapperboard','Séries'],['seasons','layers','Temporadas'],['episodes','play','Episódios'],['media','images','Biblioteca de mídia'],['schedule','calendar-days','Calendário editorial'],['homepage','panels-top-left','CMS da página inicial'],['teams','users','Equipes e permissões'],['settings','settings','Configurações']];function side(){return `<aside class="sidebar" id="sidebar"><div class="row between"><div class="brand">CENA<em>LIVRE</em><div class="muted tiny" style="letter-spacing:0;font-weight:500">Studio</div></div><button class="btn small mobile-side-close" data-action="toggle-side">${studioIcon('x')}</button></div><div class="sidebar-label">Operação editorial</div>${sideItems.map(([p,ic,t])=>`<button data-action="route" data-path="/studio/${p}" class="side-link ${route.parts[1]===p?'active':''}"><span class="side-icon">${studioIcon(ic)}</span>${t}</button>`).join('')}<div class="sidebar-label">Plataforma</div><button class="side-link" data-action="route" data-path="/">${studioIcon('external-link')} Visitar portal</button><button class="side-link" data-action="${hosted?'logout':'reset'}">${hosted?studioIcon('log-out')+' Sair do Studio':studioIcon('rotate-ccw')+' Restaurar dados'}</button></aside>`}
+function studioFrame(content){return `<div class="admin">${side()}<div class="admin-main"><div class="admin-top"><button class="btn small mobile-menu" data-action="toggle-side">${studioIcon('menu')}</button><strong style="font-size:13px">Studio</strong><div style="flex:1"></div><button class="btn small" data-action="route" data-path="/">Ver portal ${studioIcon('external-link')}</button></div><main class="admin-content">${content}</main></div></div>`}
 function pageHead(title,subtitle,actions=''){return `<div class="pagehead"><div><h1>${title}</h1>${subtitle?'<p>'+subtitle+'</p>':''}</div><div class="row">${actions}</div></div>`}
 function stat(n,label){return `<div class="panel"><div class="stat-label">${label}</div><div class="stat-value">${n}</div></div>`}
-function dashboard(){const coming=db.episodes.filter(x=>state(x)==='Em breve').sort((a,b)=>new Date(a.releaseAt)-new Date(b.releaseAt));return pageHead('Visão geral','Acompanhe o catálogo e os próximos lançamentos.',`<button class="btn primary" data-action="create-series">+ Nova série</button>`)+`<div class="stat-grid">${stat(db.series.length,'Séries cadastradas')}${stat(db.episodes.length,'Episódios')}${stat(coming.length,'Estreias programadas')}${stat(db.teams.length,'Equipes')}</div><div class="two-column"><section class="panel"><h2>Próximas estreias</h2>${coming.length?coming.slice(0,6).map(x=>`<div class="schedule-line"><div class="smallcaps" style="color:#b25d4d">${dt(x.releaseAt)}</div><strong>${esc(seriesForEpisode(x)?.title)} · ${esc(x.title)}</strong><div class="muted tiny">T${by('seasons',x.seasonId)?.number}:E${x.number}</div></div>`).join(''):'<p class="muted">Nenhuma estreia agendada.</p>'}<button class="btn small" data-action="route" data-path="/studio/schedule">Abrir calendário</button></section><section class="panel"><h2>Produções em destaque</h2>${db.series.slice(0,4).map(s=>`<div class="item-card"><img src="${esc(s.banner)}" alt=""><div class="item-info"><h3>${esc(s.title)}</h3><p>${esc(s.category)} · ${epOrder(s.id).length} episódio(s)</p></div><button class="btn small" data-action="edit-series" data-id="${s.id}">Editar</button></div>`).join('')}</section></div>`}
+function dashboard(){const coming=db.episodes.filter(x=>state(x)==='Em breve').sort((a,b)=>new Date(a.releaseAt)-new Date(b.releaseAt));return pageHead('Visão geral','Acompanhe o catálogo e os próximos lançamentos.',`<button class="btn primary" data-action="create-series">${studioIcon('plus')} Nova série</button>`)+`<div class="stat-grid">${stat(db.series.length,'Séries cadastradas')}${stat(db.episodes.length,'Episódios')}${stat(coming.length,'Estreias programadas')}${stat(db.teams.length,'Equipes')}</div><div class="two-column"><section class="panel"><h2>Próximas estreias</h2>${coming.length?coming.slice(0,6).map(x=>`<div class="schedule-line"><div class="smallcaps" style="color:#b25d4d">${dt(x.releaseAt)}</div><strong>${esc(seriesForEpisode(x)?.title)} · ${esc(x.title)}</strong><div class="muted tiny">T${by('seasons',x.seasonId)?.number}:E${x.number}</div></div>`).join(''):'<p class="muted">Nenhuma estreia agendada.</p>'}<button class="btn small" data-action="route" data-path="/studio/schedule">Abrir calendário</button></section><section class="panel"><h2>Produções em destaque</h2>${db.series.slice(0,4).map(s=>`<div class="item-card">${artworkImage(s.banner,s.poster,'Banner de '+s.title,'dashboard-artwork')}<div class="item-info"><h3>${esc(s.title)}</h3><p>${esc(s.category)} · ${epOrder(s.id).length} episódio(s)</p></div><button class="btn small" data-action="series-artwork" data-id="${s.id}">Imagens</button><button class="btn small" data-action="edit-series" data-id="${s.id}">Editar</button></div>`).join('')}</section></div>`}
 
 const catalogFilters={
  series:{query:'',category:'all',visibility:'all'},
@@ -627,12 +690,13 @@ function catalogRows(type){
   const epCount=db.episodes.filter(e=>by('seasons',e.seasonId)?.seriesId===s.id).length;
   const visibility=s.visibility||'draft';
   const badge=visibility==='public'?'Pública':visibility==='suspended'?'Suspensa':'Rascunho';
-  return '<tr><td>'+catalogCheckbox(type,s.id,s.title)+'</td><td><div class="catalog-title"><img src="'+esc(s.poster||'')+'" alt="" loading="lazy">'+
+  return '<tr><td>'+catalogCheckbox(type,s.id,s.title)+'</td><td><div class="catalog-title">'+artworkImage(s.poster,s.banner,'Pôster de '+s.title,'catalog-artwork')+
    '<div><strong>'+esc(s.title)+'</strong><div class="muted tiny">'+esc(s.category)+'</div></div></div></td>'+
    '<td><span class="badge '+(visibility==='public'?'green':visibility==='suspended'?'orange':'blue')+'">'+badge+'</span></td>'+
    '<td class="catalog-wrap">'+esc((s.teamIds||[]).map(id=>by('teams',id)?.name).filter(Boolean).join(', ')||'Sem equipe')+'</td>'+
    '<td><button class="btn small catalog-count" data-action="catalog-to-seasons" data-id="'+esc(s.id)+'">'+count+' temp. · '+epCount+' ep.</button></td>'+
-   '<td class="catalog-row-actions"><button class="btn small" data-action="edit-series" data-id="'+esc(s.id)+'">Editar</button>'+
+   '<td class="catalog-row-actions"><button class="btn small" data-action="series-artwork" data-id="'+esc(s.id)+'">Imagens</button>'+
+   '<button class="btn small" data-action="edit-series" data-id="'+esc(s.id)+'">Editar</button>'+
    '<button class="btn small catalog-delete" data-action="delete-series" data-id="'+esc(s.id)+'">Excluir</button></td></tr>';
  }).join('');
  if(type==='seasons')return items.map(season=>{
@@ -689,7 +753,7 @@ function episodesAdmin(){return catalogPage('episodes')}
 function mediaAdmin(){
  const allTags=[...new Set(mediaData.assets.flatMap(a=>a.tags))].sort();
  return pageHead('Biblioteca de mídia','Organize, encontre e reutilize suas imagens.',
- '<button class="btn primary" data-action="media-upload-open">+ Enviar imagem</button>')+
+ '<button class="btn primary" data-action="media-upload-open">'+studioIcon('upload')+' Enviar imagem</button>')+
  '<div class="panel"><div class="row between"><div><h2>Arquivos armazenados</h2><p class="muted tiny">Busque imagens por nome, categoria ou tag.</p></div>'+
  '<span class="badge" id="media-library-count">'+mediaData.assets.length+' arquivo(s)</span></div>'+
  '<div class="media-toolbar"><input class="input" id="media-search" placeholder="Buscar nome, arquivo ou tag" value="'+esc(mediaSearch)+'">'+
@@ -825,9 +889,9 @@ function editorialRows(type){
   '<td>'+esc(editorialKindLabels[x.kind]||x.kind)+'</td>'+
   '<td><span class="badge '+(x.active?'green':'blue')+'">'+(x.active?'Visível':'Oculta')+'</span></td>'+
   '<td class="cms-order-buttons"><button class="btn small" type="button" data-action="editorial-move" data-id="'+esc(x.id)+
-  '" data-direction="-1" '+(index===0?'disabled':'')+' aria-label="Mover seção para cima">↑</button>'+
+  '" data-direction="-1" '+(index===0?'disabled':'')+' aria-label="Mover seção para cima">'+studioIcon('arrow-up')+'</button>'+
   '<button class="btn small" type="button" data-action="editorial-move" data-id="'+esc(x.id)+
-  '" data-direction="1" '+(index===db.homeSections.length-1?'disabled':'')+' aria-label="Mover seção para baixo">↓</button></td>'+
+  '" data-direction="1" '+(index===db.homeSections.length-1?'disabled':'')+' aria-label="Mover seção para baixo">'+studioIcon('arrow-down')+'</button></td>'+
   '<td class="catalog-row-actions"><button class="btn small" data-action="editorial-section-edit" data-id="'+esc(x.id)+'">Editar</button>'+
   '<button class="btn small catalog-delete" data-action="editorial-delete" data-type="sections" data-id="'+esc(x.id)+'">Excluir</button></td></tr>';
  }).join('');
@@ -847,9 +911,9 @@ function editorialPanel(type){
  const heads={banners:['Campanha','Estado','Início','Término','Ações'],
   sections:['Seção','Tipo','Visibilidade','Ordem','Ações'],
   schedule:['Episódio','Estado','Estreia','Término','Ações']};
- const buttons=type==='banners'?'<button type="button" class="btn primary" data-action="create-banner">+ Novo banner</button>':
-  type==='sections'?'<button type="button" class="btn primary" data-action="editorial-section-create">+ Nova seção</button>':
-   '<button type="button" class="btn primary" data-action="create-episode">+ Novo episódio</button>';
+ const buttons=type==='banners'?'<button type="button" class="btn primary" data-action="create-banner">'+studioIcon('plus')+' Novo banner</button>':
+  type==='sections'?'<button type="button" class="btn primary" data-action="editorial-section-create">'+studioIcon('plus')+' Nova seção</button>':
+   '<button type="button" class="btn primary" data-action="create-episode">'+studioIcon('plus')+' Novo episódio</button>';
  return '<section class="panel catalog-manager" data-editorial-panel="'+type+'"><div class="row between cms-panel-head">'+
  '<h2>'+titles[type]+'</h2>'+buttons+'</div>'+editorialToolbar(type)+editorialActions(type)+
  '<p class="catalog-results" data-editorial-result-count="'+type+'">'+editorialItems(type).length+' itens</p>'+
@@ -867,7 +931,8 @@ function refreshEditorialPanel(type){
  syncEditorialSelection(type);
 }
 function scheduleAdmin(){return pageHead('Calendário editorial','Gerencie datas de estreia e publicação.')+editorialPanel('schedule')}
-function homepageAdmin(){return pageHead('CMS da página inicial','Organize campanhas e seções do portal.')+
+function homepageAdmin(){return pageHead('CMS da página inicial','Organize campanhas e seções do portal.',
+ '<button type="button" class="btn" data-action="route" data-path="/studio/series">'+studioIcon('images')+' Imagens das séries</button>')+
  editorialPanel('banners')+editorialPanel('sections')}
 
 let pendingEditorial=null;
@@ -983,7 +1048,7 @@ async function runEditorialOperation(button,dateInfo){
  }catch(error){toast(editorialErrorMessage(error));if(button)button.disabled=false}
 }
 
-function teamsAdmin(){return pageHead('Equipes e permissões','Colaboradores, papéis e responsabilidade pelas produções.',`<button class="btn" data-action="create-team">+ Equipe</button><button class="btn primary" data-action="create-member">+ Integrante</button>`)+`<div class="two-column"><div class="panel"><h2>Equipes</h2><div class="stack">${db.teams.map(t=>`<div class="item-card"><div class="item-info"><h3>${esc(t.name)}</h3><p>${db.members.filter(m=>m.teamId===t.id).length} integrante(s) · ${db.series.filter(s=>s.teamIds.includes(t.id)).length} produção(ões)</p></div><button class="btn small" data-action="edit-team" data-id="${t.id}">Editar</button></div>`).join('')}</div></div><div class="panel"><h2>Integrantes</h2><table class="data-table"><thead><tr><th>Nome</th><th>Equipe</th><th>Papel</th><th></th></tr></thead><tbody>${db.members.map(m=>`<tr><td>${esc(m.name)}<div class="tiny muted">${esc(m.email)}</div></td><td>${esc(by('teams',m.teamId)?.name)}</td><td><span class="badge">${esc(m.role)}</span></td><td><button class="btn small" data-action="edit-member" data-id="${m.id}">Editar</button></td></tr>`).join('')}</tbody></table></div></div><div class="notice">Gerencie integrantes e seus papéis na equipe.</div>`}
+function teamsAdmin(){return pageHead('Equipes e permissões','Colaboradores, papéis e responsabilidade pelas produções.',`<button class="btn" data-action="create-team">${studioIcon('plus')} Equipe</button><button class="btn primary" data-action="create-member">${studioIcon('plus')} Integrante</button>`)+`<div class="two-column"><div class="panel"><h2>Equipes</h2><div class="stack">${db.teams.map(t=>`<div class="item-card"><div class="item-info"><h3>${esc(t.name)}</h3><p>${db.members.filter(m=>m.teamId===t.id).length} integrante(s) · ${db.series.filter(s=>s.teamIds.includes(t.id)).length} produção(ões)</p></div><button class="btn small" data-action="edit-team" data-id="${t.id}">Editar</button></div>`).join('')}</div></div><div class="panel"><h2>Integrantes</h2><table class="data-table"><thead><tr><th>Nome</th><th>Equipe</th><th>Papel</th><th></th></tr></thead><tbody>${db.members.map(m=>`<tr><td>${esc(m.name)}<div class="tiny muted">${esc(m.email)}</div></td><td>${esc(by('teams',m.teamId)?.name)}</td><td><span class="badge">${esc(m.role)}</span></td><td><button class="btn small" data-action="edit-member" data-id="${m.id}">Editar</button></td></tr>`).join('')}</tbody></table></div></div><div class="notice">Gerencie integrantes e seus papéis na equipe.</div>`}
 function settingsAdmin(){return pageHead('Configurações','')+`<nav class="settings-nav" aria-label="Categorias das configurações"><button class="btn small" data-action="settings-jump" data-target="settings-identidade" type="button">Identidade</button><button class="btn small" data-action="settings-jump" data-target="settings-marca" type="button">Marca</button><button class="btn small" data-action="settings-jump" data-target="settings-reproducao" type="button">Reprodução</button><button class="btn small" data-action="settings-jump" data-target="settings-uploads" type="button">Uploads</button><button class="btn small" data-action="settings-jump" data-target="settings-seguranca" type="button">Segurança</button></nav><section class="panel form-surface-light settings-panel" id="settings-identidade"><div class="settings-section-head"><div><h2>Identidade e portal</h2><p>Dados públicos, imagens da marca e comportamento da reprodução.</p></div></div><form id="settings-form" class="stack"><fieldset class="settings-category"><legend>Identidade da plataforma</legend><div class="field"><label>Nome da plataforma</label><input class="input" name="siteName" value="${esc(db.preferences.siteName)}" required></div><div class="field"><label>Descrição pública</label><textarea class="textarea" name="siteDescription">${esc(db.preferences.siteDescription)}</textarea></div><div class="field"><label>E-mail de contato institucional</label><input class="input" name="contactEmail" type="email" value="${esc(db.preferences.contactEmail||'')}" placeholder="contato@exemplo.com"></div></fieldset><fieldset class="settings-category" id="settings-marca"><legend>Marca · logotipo e ícone</legend>${mediaField('Logotipo','logoUrl',db.preferences.logoUrl||'','logo')}${mediaField('Ícone / favicon','iconUrl',db.preferences.iconUrl||'','icon')}</fieldset><fieldset class="settings-category" id="settings-reproducao"><legend>Reprodução</legend><label class="row tiny"><input type="checkbox" name="autoplay" ${db.preferences.autoplay?'checked':''}> Sugerir reprodução automática do próximo episódio</label></fieldset><div><button class="btn primary" type="submit" ${hosted&&!studioUser?.isAdmin?'disabled':''}>Salvar configurações</button></div></form></section><section class="panel form-surface-light settings-panel" id="settings-uploads"><div class="settings-section-head"><div><h2>Biblioteca de Mídia e uploads</h2><p>Defina os formatos e limites dos arquivos enviados.</p></div></div><form id="upload-settings-form" class="stack"><div class="form-grid"><div class="field"><label>Tamanho máximo por arquivo (1 a 20 MB)</label><input class="input" type="number" name="maxFileMb" min="1" max="20" value="${mediaData.settings.maxFileMb}" required></div><div class="field"><label>Quantidade máxima de imagens (1 a 2000)</label><input class="input" type="number" name="maxFiles" min="1" max="2000" value="${mediaData.settings.maxFiles}" required></div></div><div class="field"><label>Formatos permitidos</label><div class="pillset">${['png','jpeg','webp','gif'].map(t=>`<label class="pill"><input type="checkbox" name="allowedTypes" value="${t}" ${mediaData.settings.allowedTypes.includes(t)?'checked':''}> ${t.toUpperCase()}</label>`).join('')}</div></div><p class="muted tiny">Escolha os formatos e limites permitidos para novos envios. Os arquivos existentes serão mantidos.</p><div><button class="btn primary" type="submit" ${!studioUser?.isAdmin?'disabled':''}>Salvar limites de upload</button></div></form></section><section class="panel settings-panel" id="settings-seguranca"><h2>Ambiente e segurança</h2><p class="muted">O acesso às funções administrativas segue as permissões de cada usuário.</p></section>`}
 function studioPage(){const page=route.parts[1]||'dashboard';return studioFrame(({dashboard,series:seriesAdmin,seasons:seasonsAdmin,episodes:episodesAdmin,media:mediaAdmin,schedule:scheduleAdmin,homepage:homepageAdmin,teams:teamsAdmin,settings:settingsAdmin}[page]||dashboard)())}
 function render(){parse();
@@ -1019,8 +1084,18 @@ if(route.parts[0]==='assistir'&&activeVideo===route.parts[1]){
  if(video){destroyYouTubePlayer();void mountYouTubePlayer(episode.id,video)}
 }
 }
-function modal(title,body){document.getElementById('modal-root').innerHTML=`<div class="modal-backdrop" data-action="close-modal"><div class="modal form-surface-light" role="dialog" aria-modal="true" aria-label="${esc(title)}"><div class="row between"><h2>${esc(title)}</h2><button class="btn small" data-action="close-modal">✕</button></div>${body}</div></div>`}
+function modal(title,body){document.getElementById('modal-root').innerHTML=`<div class="modal-backdrop" data-action="close-modal"><div class="modal form-surface-light" role="dialog" aria-modal="true" aria-label="${esc(title)}"><div class="row between"><h2>${esc(title)}</h2><button class="btn small" data-action="close-modal" aria-label="Fechar">${studioIcon('x')}</button></div>${body}</div></div>`}
 const field=(label,name,value='',type='text',extra='')=>`<div class="field"><label>${label}</label><input class="input" name="${name}" type="${type}" value="${esc(value)}" ${extra}></div>`;const area=(label,name,value='')=>`<div class="field span2"><label>${label}</label><textarea class="textarea" name="${name}">${esc(value)}</textarea></div>`;const select=(label,name,opts,selected)=>`<div class="field"><label>${label}</label><select class="select" name="${name}">${opts.map(x=>`<option value="${esc(x.id)}" ${x.id===selected?'selected':''}>${esc(x.title||x.name)}</option>`).join('')}</select></div>`;const submit=`<div class="span2 row between" style="margin-top:12px"><button type="button" class="btn" data-action="close-modal">Cancelar</button><button type="submit" class="btn primary">Salvar alterações</button></div>`;
+function openSeriesArtwork(seriesId){
+ const s=by('series',seriesId);
+ if(!s)return;
+ const intro='<p class="span2 muted tiny">Escolha ou envie as artes usadas na página inicial, na vitrine e na página da série. Pôster: 2:3. Banner: 16:9.</p>';
+ const body='<form class="form-grid" data-form="series-artwork" data-id="'+esc(s.id)+'">'+intro+
+  mediaField('Pôster da série (2:3)','poster',s.poster||'','poster')+
+  mediaField('Banner da série (16:9)','banner',s.banner||'','banner')+
+  submit+'</form>';
+ modal('Imagens · '+s.title,body);
+}
 function openEditor(type,entityId){const editing=!!entityId,x=editing?by(type,entityId):null;let body='';if(type==='series'){body=`<form class="form-grid" data-form="series" data-id="${entityId||''}">${field('Título','title',x?.title,'text','required')}${field('Categoria','category',x?.category||'Documentário','text','required')}${area('Sinopse','summary',x?.summary)}${mediaField('Pôster vertical','poster',x?.poster||img('new-poster',650,900),'poster')}${mediaField('Banner horizontal','banner',x?.banner||img('new-banner',1300,700),'banner')}<div class="field span2"><label>Equipes responsáveis (selecione uma ou mais)</label><div class="pillset">${db.teams.map(t=>`<label class="pill"><input type="checkbox" name="teamIds" value="${t.id}" ${(x?.teamIds||[]).includes(t.id)?'checked':''}> ${esc(t.name)}</label>`).join('')}</div></div><label class="span2"><input type="checkbox" name="featured" ${x?.featured?'checked':''}> Destaque no portal</label>${submit}</form>`}else if(type==='seasons'){body=`<form class="form-grid" data-form="seasons" data-id="${entityId||''}">${select('Série','seriesId',db.series,x?.seriesId)}${field('Número','number',x?.number||seasons(db.series[0]?.id).length+1,'number','min="1" required')}${field('Título da temporada','title',x?.title||'Nova temporada','text','required')}${select('Estado da temporada','status',catalogStatuses.seasons.map(t=>({id:t.id,title:t.name})),x?.status||(editing?'published':'draft'))}${submit}</form>`}else if(type==='episodes'){body=`<form class="form-grid" data-form="episodes" data-id="${entityId||''}">${select('Temporada','seasonId',db.seasons.map(s=>({...s,title:`${by('series',s.seriesId)?.title} — T${s.number}`})),x?.seasonId)}${field('Número do episódio','number',x?.number||1,'number','min="1" required')}${field('Título','title',x?.title,'text','required')}${field('Duração estimada (min)','duration',x?.duration||20,'number','min="1"')}${area('Sinopse','summary',x?.summary)}${field('URL ou ID do vídeo YouTube','youtube',x?.youtube)}${mediaField('Thumbnail do episódio','thumbnail',x?.thumbnail||img('new-episode',1200,700),'thumbnail')}${field('Disponível a partir de','releaseAt',(x?datetimeLocal(x.releaseAt):future(1)),'datetime-local','required')}${field('Disponível até (opcional)','endAt',(x?datetimeLocal(x.endAt):''),'datetime-local')}${select('Estado editorial','status',[{id:'published',title:'Aprovado / publicado'},{id:'scheduled',title:'Agendado'},{id:'draft',title:'Rascunho'},{id:'suspended',title:'Suspenso'}],x?.status||'scheduled')}${submit}</form>`}else if(type==='banners'){body=`<form class="form-grid" data-form="banners" data-id="${entityId||''}">${field('Título','title',x?.title,'text','required')}${field('Prioridade (menor primeiro)','order',x?.order||1,'number','min="1"')}${area('Texto de apoio','subtitle',x?.subtitle)}${mediaField('Banner desktop','image',x?.image||img('new-campaign',1400,800),'banner')}${mediaField('Banner mobile (opcional)','mobileImage',x?.mobileImage,'banner')}${select('Destino: série','target',db.series,x?.target)}${field('Início da campanha','startAt',(x?datetimeLocal(x.startAt):future(1)),'datetime-local')}${field('Fim da campanha','endAt',(x?datetimeLocal(x.endAt):''),'datetime-local')}<label class="span2"><input type="checkbox" name="active" ${x?.active!==false?'checked':''}> Campanha habilitada</label>${submit}</form>`}else if(type==='teams'){body=`<form class="form-grid" data-form="teams" data-id="${entityId||''}">${field('Nome da equipe','name',x?.name,'text','required')}${field('Descrição','description',x?.description)}${submit}</form>`}else if(type==='members'){body=`<form class="form-grid" data-form="members" data-id="${entityId||''}">${field('Nome','name',x?.name,'text','required')}${field('E-mail','email',x?.email,'email','required')}${select('Equipe','teamId',db.teams,x?.teamId)}${select('Papel na equipe','role',[{id:'Gestora',title:'Gestora'},{id:'Produtor',title:'Produtor'},{id:'Editor',title:'Editor'},{id:'Publicador',title:'Publicador'},{id:'Colaborador',title:'Colaborador'}],x?.role||'Editor')}${submit}</form>`}else if(type==='media'){body=`<form class="form-grid" data-form="media">${field('Nome do arquivo','name','','text','required')}${field('URL da imagem','url','','url','required')}${submit}</form>`}if(hosted&&type==='series'){
   if(editing){
     body=body.replaceAll('name="teamIds"','name="teamIds" disabled');
@@ -1155,7 +1230,7 @@ async function deleteCatalogEntity(type,id,button){
 }
 
 function formSubmit(form){const type=form.dataset.form;if(!type)return;
-if(hosted){if(['series','seasons','episodes','teams','members','banners'].includes(type)){void saveRemoteEntity(form);}else toast('Esta operação ainda não está habilitada.');return;}
+if(hosted){if(['series','series-artwork','seasons','episodes','teams','members','banners'].includes(type)){void saveRemoteEntity(form);}else toast('Esta operação ainda não está habilitada.');return;}
 const f=new FormData(form),v=Object.fromEntries(f.entries());if(type==='episodes'&&v.endAt&&v.releaseAt&&new Date(v.endAt)<=new Date(v.releaseAt)){toast('O término precisa ser posterior à estreia.');return}if(type==='banners'&&v.endAt&&v.startAt&&new Date(v.endAt)<=new Date(v.startAt)){toast('O fim da campanha precisa ser posterior ao início.');return}if(type==='series'){v.slug=slug(v.title);v.teamIds=f.getAll('teamIds');v.featured=f.has('featured')}if(type==='banners'){v.active=f.has('active');v.order=Number(v.order)||1}if(type==='episodes'){v.number=Number(v.number);v.duration=Number(v.duration);v.status=v.status||'scheduled'}if(type==='seasons')v.number=Number(v.number);if(type==='series'&&!v.teamIds.length){toast('Selecione uma equipe responsável.');return}const old=form.dataset.id&&by(type,form.dataset.id);if(old)Object.assign(old,v);else db[type].push({id:id(type[0]),...v});save();document.getElementById('modal-root').innerHTML='';render();toast('Alterações salvas.')}
 function handle(action,el){const eid=el.dataset.id;
 if(action==='editorial-reset'){
@@ -1179,6 +1254,7 @@ if(action==='editorial-apply'){
 }
 if(action==='editorial-confirm'){void runEditorialOperation(el);return}
 
+if(action==='series-artwork'){openSeriesArtwork(eid);return}
 if(action==='bulk-clear'){
  const type=el.dataset.type;if(catalogSelection[type]){catalogSelection[type].clear();refreshCatalogTable(type);}
  return;
@@ -1378,7 +1454,28 @@ if(e.target.matches('#media-upload-form input[type="file"]')){
  }
  return;
 }
-if(e.target.id==='public-season'){studioSection=e.target.value;render()}else if(e.target.matches('input[data-action="toggle-section"]'))handle('toggle-section',e.target)});document.addEventListener('dragover',e=>{
+if(e.target.id==='public-season'){studioSection=e.target.value;render()}else if(e.target.matches('input[data-action="toggle-section"]'))handle('toggle-section',e.target)});// Image load errors do not bubble; capture them to provide a second source and a
+// visible placeholder rather than an invisible element when a saved URL stops working.
+document.addEventListener('error',event=>{
+ const image=event.target;
+ if(!(image instanceof HTMLImageElement))return;
+ if(image.matches('.media-inline-thumb img')){
+  const feedback=image.closest('.media-field')?.querySelector('.media-inline-status');
+  if(feedback)feedback.textContent='Imagem indisponível. Selecione ou envie outra imagem.';
+  image.classList.add('artwork-unavailable');
+  return;
+ }
+ if(!image.dataset.artworkKind)return;
+ const backup=image.dataset.artworkFallback;
+ if(backup&&!image.dataset.artworkRetried&&image.getAttribute('src')!==backup){
+   image.dataset.artworkRetried='1';
+   image.src=backup;
+   return;
+ }
+ image.classList.add('artwork-unavailable');
+ image.setAttribute('title','Imagem indisponível. Atualize a mídia no Studio.');
+},true);
+document.addEventListener('dragover',e=>{
   const area=e.target.closest('.media-drop');if(area){e.preventDefault();area.classList.add('drag-over');}
 });
 document.addEventListener('dragleave',e=>{const area=e.target.closest('.media-drop');if(area)area.classList.remove('drag-over')});
