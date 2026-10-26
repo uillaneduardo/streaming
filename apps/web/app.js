@@ -52,6 +52,134 @@ async function apiRequest(url,options={}){
   if(!response.ok)throw new Error(response.status===403?'Acesso negado: verifique suas permissões.':response.status===401?'Sessão expirada. Entre novamente.':result.error||'Falha na requisição.');
   return result;
 }
+
+const inviteRoleLabels={manager:'Gestor',publisher:'Publicador',editor:'Editor',viewer:'Visualizador'};
+let studioInvitations=[],inviteDetails=null,inviteLoadToken='',inviteError='',inviteAccepted=false;
+let postLoginInviteToken='';
+async function fetchInvitations(){
+ if(!hosted||!studioUser){studioInvitations=[];return}
+ try{studioInvitations=(await apiRequest('/api/v1/studio/invitations')).invitations||[]}
+ catch(error){studioInvitations=[];console.warn('Convites indisponíveis',error)}
+}
+function canInvite(){
+ return hosted&&studioUser&&(studioUser.isAdmin||db.members.some(m=>m.id===studioUser.id&&m.role==='manager'));
+}
+function invitationList(){
+ if(!hosted||!canInvite())return '';
+ const pending=studioInvitations.filter(x=>x.status==='pending');
+ return '<section class="panel"><div class="row between" style="flex-wrap:wrap"><h2>Convites para equipes</h2>'+
+  '<span class="badge">'+pending.length+' pendente(s)</span></div>'+
+  '<p class="muted tiny">Convites válidos por 72 horas. Compartilhe o link ao criá-lo.</p>'+
+  '<div class="catalog-table-scroll"><table class="data-table"><thead><tr>'+
+  '<th>E-mail</th><th>Equipe</th><th>Papel</th><th>Estado</th><th>Ação</th></tr></thead><tbody>'+
+  (studioInvitations.length?studioInvitations.map(x=>'<tr><td>'+esc(x.email)+'</td>'+
+   '<td>'+esc(x.teamName)+'</td><td>'+esc(inviteRoleLabels[x.role]||x.role)+'</td>'+
+   '<td><span class="badge">'+esc({pending:'Pendente',accepted:'Aceito',revoked:'Revogado',expired:'Expirado'}[x.status]||x.status)+'</span></td>'+
+   '<td>'+(x.status==='pending'?'<button type="button" class="btn small catalog-delete" data-action="invite-revoke" data-id="'+esc(x.id)+'">Revogar</button>':'—')+
+   '</td></tr>').join(''):'<tr><td colspan="5" class="muted">Nenhum convite criado.</td></tr>')+
+   '</tbody></table></div></section>';
+}
+function inviteModal(){
+ const teams=studioUser?.isAdmin?db.teams:db.teams.filter(t=>
+  db.members.some(m=>m.teamId===t.id&&m.id===studioUser.id&&m.role==='manager'));
+ if(!teams.length){toast('Você não gerencia nenhuma equipe.');return}
+ const roles=studioUser?.isAdmin?Object.keys(inviteRoleLabels):['publisher','editor','viewer'];
+ const body='<form id="studio-invite-form" class="form-grid">'+
+  select('Equipe','teamId',teams,teams[0].id)+
+  select('Papel','role',roles.map(id=>({id,title:inviteRoleLabels[id]})),'viewer')+
+  field('E-mail do convidado','email','','email','required autocomplete="email"')+
+  '<p class="span2 muted tiny">O link é exibido uma vez, pode ser revogado e expira após 72 horas. Envie-o à pessoa convidada.</p>'+
+  submit+'</form>';
+ modal('Convidar integrante',body);
+}
+async function createInvitation(form){
+ const fields=new FormData(form),button=form.querySelector('[type="submit"]');
+ if(button)button.disabled=true;
+ try{
+  const invite=await apiRequest('/api/v1/studio/invitations',{method:'POST',
+   body:JSON.stringify({teamId:fields.get('teamId'),role:fields.get('role'),email:fields.get('email')})});
+  await fetchInvitations();
+  const url=location.origin+'/#/convite/'+invite.token;
+  modal('Convite criado',
+   '<div class="stack"><p>Convite para <strong>'+esc(invite.email)+'</strong> gerado.</p>'+
+   '<label class="field"><span>Link de acesso (válido por 72 horas)</span>'+
+   '<input class="input" id="invite-created-link" readonly value="'+esc(url)+'"></label>'+
+   '<p class="muted tiny">Copie o link agora. Por segurança, ele não será exibido novamente.</p>'+
+   '<div class="row between"><button type="button" class="btn" data-action="close-modal">Fechar</button>'+
+   '<button type="button" class="btn primary" data-action="invite-copy">'+studioIcon('copy')+' Copiar link</button></div></div>');
+  render();toast('Convite criado.');
+ }catch(error){
+  const errors={pending_invitation_exists:'Já existe um convite pendente para este e-mail.',
+   already_member:'Esta pessoa já faz parte da equipe.',manager_invites_require_admin:'Somente um administrador pode convidar gestores.'};
+  toast(errors[error.message]||error.message||'Não foi possível criar o convite.');
+  if(button)button.disabled=false;
+ }
+}
+async function revokeInvitation(id){
+ if(!confirm('Revogar este convite? O link deixará de funcionar.'))return;
+ try{
+  await apiRequest('/api/v1/studio/invitations/'+encodeURIComponent(id),{method:'DELETE'});
+  await fetchInvitations();render();toast('Convite revogado.');
+ }catch(error){toast(error.message)}
+}
+function invitePage(){
+ if(!hosted)return '<main class="container"><h1>Convites disponíveis somente no Studio publicado.</h1></main>';
+ const token=route.parts[1]||'';
+ const waiting=inviteLoadToken!==token;
+ const error=inviteError&&!waiting;
+ return publicNav()+'<main class="container" style="max-width:580px;margin:60px auto 100px">'+
+ '<section class="auth-panel form-surface-light"><h1>Convite para o CenaLivre</h1>'+
+ (inviteAccepted?'<p>Convite aceito. Sua conta já pode acessar a equipe.</p>'+
+  '<button class="btn primary" data-action="go-studio">Abrir Studio</button>':
+  error?'<p class="muted">'+esc(inviteError)+'</p>':
+  waiting||!inviteDetails?'<p class="muted">Verificando convite...</p>':
+  '<p>Você foi convidado para a equipe <strong>'+esc(inviteDetails.teamName)+'</strong>.</p>'+
+  '<p class="muted">E-mail: '+esc(inviteDetails.email)+' · Papel: '+
+   esc(inviteRoleLabels[inviteDetails.role]||inviteDetails.role)+'</p>'+
+  (studioUser?
+   '<div class="stack"><p class="muted tiny">Conta conectada: '+esc(studioUser.email)+
+   '. O e-mail deve corresponder ao do convite.</p>'+
+   '<button class="btn primary" data-action="invite-accept-existing">Aceitar convite</button></div>':
+   '<form id="invite-accept-form" class="stack">'+
+    field('Seu nome','name','','text','required autocomplete="name"')+
+    field('Crie uma senha (mínimo 12 caracteres)','password','','password','required minlength="12" maxlength="128" autocomplete="new-password"')+
+    '<button class="btn primary" type="submit">Criar conta e aceitar</button></form>'+
+    '<p class="muted tiny" style="margin-top:16px">Já possui uma conta? '+
+    '<button type="button" class="btn small" data-action="invite-login">Entrar para aceitar</button></p>'
+  ))+'</section></main>';
+}
+async function lookupInvite(token){
+ inviteLoadToken=token;inviteError='';inviteDetails=null;inviteAccepted=false;
+ if(!/^[a-f0-9]{64}$/.test(token)){inviteError='Link de convite inválido.';render();return}
+ try{
+  const data=await apiRequest('/api/v1/invitations/lookup',{method:'POST',body:JSON.stringify({token})});
+  if(inviteLoadToken!==token)return;
+  inviteDetails=data.invitation;
+ }catch(error){
+  if(inviteLoadToken!==token)return;
+  inviteError='Convite inválido, expirado, revogado ou já utilizado.';
+ }
+ render();
+}
+async function acceptInvitation(name,password,button){
+ if(button)button.disabled=true;
+ try{
+  await apiRequest('/api/v1/invitations/accept',{method:'POST',
+   body:JSON.stringify({token:inviteLoadToken,...(name?{name,password}:{})})});
+  inviteAccepted=true;inviteError='';inviteDetails=null;
+  if(studioUser)await fetchStudioData();
+  render();toast('Convite aceito.');
+ }catch(error){
+  const labels={existing_account_login_required:'Esta conta já existe. Entre para aceitar o convite.',
+    invitation_email_mismatch:'Entre com o e-mail para o qual o convite foi enviado.',
+    invalid_new_user:'Informe seu nome e uma senha de pelo menos 12 caracteres.',
+    invitation_unavailable:'Este convite expirou, foi revogado ou já foi usado.',
+    csrf_required:'Sua sessão expirou. Entre novamente.'};
+  toast(labels[error.message]||error.message||'Não foi possível aceitar o convite.');
+  if(button)button.disabled=false;
+ }
+}
+
 async function fetchStudioData(){
   const payload=await apiRequest('/api/v1/studio/bootstrap');
   let settings=emptyState().preferences;
@@ -60,6 +188,7 @@ async function fetchStudioData(){
   }
   studioData={...emptyState(),...payload,preferences:settings,saved:[]};
   await fetchMedia();
+  await fetchInvitations();
   render();
 }
 async function loadSession(){
@@ -77,7 +206,9 @@ async function loginStudio(form){
   try{
     const data=await apiRequest('/api/v1/auth/login',{method:'POST',body:JSON.stringify({email,password})});
     studioUser=data.user;csrfToken=data.csrfToken;await fetchStudioData();
-    nav('/studio/dashboard');
+    const next=postLoginInviteToken?'/convite/'+postLoginInviteToken:'/studio/dashboard';
+    postLoginInviteToken='';
+    nav(next);
     toast('Acesso ao Studio autorizado.');
   }catch(error){toast(error.message||'Não foi possível entrar.');if(button)button.disabled=false;}
 }
@@ -1079,7 +1210,7 @@ async function runEditorialOperation(button,dateInfo){
  }catch(error){toast(editorialErrorMessage(error));if(button)button.disabled=false}
 }
 
-function teamsAdmin(){return pageHead('Equipes e permissões','Colaboradores, papéis e responsabilidade pelas produções.',`<button class="btn" data-action="create-team">${studioIcon('plus')} Equipe</button><button class="btn primary" data-action="create-member">${studioIcon('plus')} Integrante</button>`)+`<div class="two-column"><div class="panel"><h2>Equipes</h2><div class="stack">${db.teams.map(t=>`<div class="item-card"><div class="item-info"><h3>${esc(t.name)}</h3><p>${db.members.filter(m=>m.teamId===t.id).length} integrante(s) · ${db.series.filter(s=>s.teamIds.includes(t.id)).length} produção(ões)</p></div><button class="btn small" data-action="edit-team" data-id="${t.id}">Editar</button></div>`).join('')}</div></div><div class="panel"><h2>Integrantes</h2><table class="data-table"><thead><tr><th>Nome</th><th>Equipe</th><th>Papel</th><th></th></tr></thead><tbody>${db.members.map(m=>`<tr><td>${esc(m.name)}<div class="tiny muted">${esc(m.email)}</div></td><td>${esc(by('teams',m.teamId)?.name)}</td><td><span class="badge">${esc(m.role)}</span></td><td><button class="btn small" data-action="edit-member" data-id="${m.id}">Editar</button></td></tr>`).join('')}</tbody></table></div></div><div class="notice">Gerencie integrantes e seus papéis na equipe.</div>`}
+function teamsAdmin(){return pageHead('Equipes e permissões','Colaboradores, papéis e responsabilidade pelas produções.',`<button class="btn" data-action="create-team">${studioIcon('plus')} Equipe</button><button class="btn primary" data-action="create-member">${studioIcon('plus')} Integrante</button>${canInvite()?'<button type="button" class="btn primary" data-action="invite-open">'+studioIcon('users')+' Convidar</button>':''}`)+`<div class="two-column"><div class="panel"><h2>Equipes</h2><div class="stack">${db.teams.map(t=>`<div class="item-card"><div class="item-info"><h3>${esc(t.name)}</h3><p>${db.members.filter(m=>m.teamId===t.id).length} integrante(s) · ${db.series.filter(s=>s.teamIds.includes(t.id)).length} produção(ões)</p></div><button class="btn small" data-action="edit-team" data-id="${t.id}">Editar</button></div>`).join('')}</div></div><div class="panel"><h2>Integrantes</h2><table class="data-table"><thead><tr><th>Nome</th><th>Equipe</th><th>Papel</th><th></th></tr></thead><tbody>${db.members.map(m=>`<tr><td>${esc(m.name)}<div class="tiny muted">${esc(m.email)}</div></td><td>${esc(by('teams',m.teamId)?.name)}</td><td><span class="badge">${esc(m.role)}</span></td><td><button class="btn small" data-action="edit-member" data-id="${m.id}">Editar</button></td></tr>`).join('')}</tbody></table></div></div><div class="notice">Gerencie integrantes e seus papéis na equipe.</div>`+invitationList()}
 function settingsAdmin(){return pageHead('Configurações','')+`<nav class="settings-nav" aria-label="Categorias das configurações"><button class="btn small" data-action="settings-jump" data-target="settings-identidade" type="button">Identidade</button><button class="btn small" data-action="settings-jump" data-target="settings-marca" type="button">Marca</button><button class="btn small" data-action="settings-jump" data-target="settings-reproducao" type="button">Reprodução</button><button class="btn small" data-action="settings-jump" data-target="settings-uploads" type="button">Uploads</button><button class="btn small" data-action="settings-jump" data-target="settings-seguranca" type="button">Segurança</button></nav><section class="panel form-surface-light settings-panel" id="settings-identidade"><div class="settings-section-head"><div><h2>Identidade e portal</h2><p>Dados públicos, imagens da marca e comportamento da reprodução.</p></div></div><form id="settings-form" class="stack"><fieldset class="settings-category"><legend>Identidade da plataforma</legend><div class="field"><label>Nome da plataforma</label><input class="input" name="siteName" value="${esc(db.preferences.siteName)}" required></div><div class="field"><label>Descrição pública</label><textarea class="textarea" name="siteDescription">${esc(db.preferences.siteDescription)}</textarea></div><div class="field"><label>E-mail de contato institucional</label><input class="input" name="contactEmail" type="email" value="${esc(db.preferences.contactEmail||'')}" placeholder="contato@exemplo.com"></div></fieldset><fieldset class="settings-category" id="settings-marca"><legend>Marca · logotipo e ícone</legend>${mediaField('Logotipo','logoUrl',db.preferences.logoUrl||'','logo')}${mediaField('Ícone / favicon','iconUrl',db.preferences.iconUrl||'','icon')}</fieldset><fieldset class="settings-category" id="settings-reproducao"><legend>Reprodução</legend><label class="row tiny"><input type="checkbox" name="autoplay" ${db.preferences.autoplay?'checked':''}> Sugerir reprodução automática do próximo episódio</label></fieldset><div><button class="btn primary" type="submit" ${hosted&&!studioUser?.isAdmin?'disabled':''}>Salvar configurações</button></div></form></section><section class="panel form-surface-light settings-panel" id="settings-uploads"><div class="settings-section-head"><div><h2>Biblioteca de Mídia e uploads</h2><p>Defina os formatos e limites dos arquivos enviados.</p></div></div><form id="upload-settings-form" class="stack"><div class="form-grid"><div class="field"><label>Tamanho máximo por arquivo (1 a 20 MB)</label><input class="input" type="number" name="maxFileMb" min="1" max="20" value="${mediaData.settings.maxFileMb}" required></div><div class="field"><label>Quantidade máxima de imagens (1 a 2000)</label><input class="input" type="number" name="maxFiles" min="1" max="2000" value="${mediaData.settings.maxFiles}" required></div></div><div class="field"><label>Formatos permitidos</label><div class="pillset">${['png','jpeg','webp','gif'].map(t=>`<label class="pill"><input type="checkbox" name="allowedTypes" value="${t}" ${mediaData.settings.allowedTypes.includes(t)?'checked':''}> ${t.toUpperCase()}</label>`).join('')}</div></div><p class="muted tiny">Escolha os formatos e limites permitidos para novos envios. Os arquivos existentes serão mantidos.</p><div><button class="btn primary" type="submit" ${!studioUser?.isAdmin?'disabled':''}>Salvar limites de upload</button></div></form></section><section class="panel settings-panel" id="settings-seguranca"><h2>Ambiente e segurança</h2><p class="muted">O acesso às funções administrativas segue as permissões de cada usuário.</p></section>`}
 function studioPage(){const page=route.parts[1]||'dashboard';return studioFrame(({dashboard,series:seriesAdmin,seasons:seasonsAdmin,episodes:episodesAdmin,media:mediaAdmin,schedule:scheduleAdmin,homepage:homepageAdmin,teams:teamsAdmin,settings:settingsAdmin}[page]||dashboard)())}
 function render(){parse();
@@ -1091,6 +1222,11 @@ if(!route.studio&&db.preferences?.iconUrl){
   icon.href=db.preferences.iconUrl;
 }
 const root=document.getElementById('app');
+if(route.parts[0]==='convite'){
+ root.innerHTML=invitePage();
+ if(hosted&&inviteLoadToken!==(route.parts[1]||''))void lookupInvite(route.parts[1]||'');
+ return;
+}
 if(hosted&&!route.studio&&publicLoadState!=='ready'){
  const failure=publicLoadState==='error';
  root.innerHTML=publicNav()+'<main class="container public-loading">'+
@@ -1264,6 +1400,21 @@ function formSubmit(form){const type=form.dataset.form;if(!type)return;
 if(hosted){if(['series','series-artwork','seasons','episodes','teams','members','banners'].includes(type)){void saveRemoteEntity(form);}else toast('Esta operação ainda não está habilitada.');return;}
 const f=new FormData(form),v=Object.fromEntries(f.entries());if(type==='episodes'&&v.endAt&&v.releaseAt&&new Date(v.endAt)<=new Date(v.releaseAt)){toast('O término precisa ser posterior à estreia.');return}if(type==='banners'&&v.endAt&&v.startAt&&new Date(v.endAt)<=new Date(v.startAt)){toast('O fim da campanha precisa ser posterior ao início.');return}if(type==='series'){v.slug=slug(v.title);v.teamIds=f.getAll('teamIds');v.featured=f.has('featured')}if(type==='banners'){v.active=f.has('active');v.order=Number(v.order)||1}if(type==='episodes'){v.number=Number(v.number);v.duration=Number(v.duration);v.status=v.status||'scheduled'}if(type==='seasons')v.number=Number(v.number);if(type==='series'&&!v.teamIds.length){toast('Selecione uma equipe responsável.');return}const old=form.dataset.id&&by(type,form.dataset.id);if(old)Object.assign(old,v);else db[type].push({id:id(type[0]),...v});save();document.getElementById('modal-root').innerHTML='';render();toast('Alterações salvas.')}
 function handle(action,el){const eid=el.dataset.id;
+if(action==='invite-open'){inviteModal();return}
+if(action==='invite-revoke'){void revokeInvitation(eid);return}
+if(action==='invite-copy'){
+ const input=document.getElementById('invite-created-link');
+ if(input){
+  if(navigator.clipboard?.writeText)void navigator.clipboard.writeText(input.value).then(()=>toast('Link copiado.'),()=>{input.select();toast('Copie o link selecionado.')});
+  else {input.select();toast('Copie o link selecionado.')}
+ }return;
+}
+if(action==='invite-login'){
+ postLoginInviteToken=route.parts[1]||'';
+ nav('/studio/dashboard');return;
+}
+if(action==='invite-accept-existing'){void acceptInvitation(null,null,el);return}
+
 if(action==='editorial-reset'){
  const type=el.dataset.type,filters=editorialFilter[type];
  if(filters){for(const name of Object.keys(filters))filters[name]=name==='query'?'':'all';render()}
@@ -1381,6 +1532,14 @@ document.addEventListener('click',e=>{
  if(el.tagName==='BUTTON')e.preventDefault();
  handle(el.dataset.action,el);
 });document.addEventListener('submit',e=>{e.preventDefault();
+if(e.target.id==='studio-invite-form'){void createInvitation(e.target);return;}
+if(e.target.id==='invite-accept-form'){
+ const fields=new FormData(e.target);
+ void acceptInvitation(String(fields.get('name')||'').trim(),String(fields.get('password')||''),
+  e.target.querySelector('[type="submit"]'));
+ return;
+}
+
 if(e.target.id==='editorial-section-form'){void persistSection(e.target);return;}
 if(e.target.id==='editorial-reschedule-form'){
  const form=e.target;

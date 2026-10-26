@@ -22,12 +22,127 @@ async function call(path,method='GET',body){
   const team=await call('/api/v1/studio/teams','POST',{name:'Teste CI Equipe Nova',description:'Equipe criada na API'});
   assert.equal(team.code,201,'Create team');
   const teamId=team.data.id;
+
+  // M1: team invitations with one-time, hashed tokens and explicit acceptance.
+  assert.equal((await call('/api/v1/studio/invitations')).code,200,'Manager-only invitation listing');
+  const invitation=await call('/api/v1/studio/invitations','POST',{
+    teamId,email:'invited-new@example.test',role:'editor'
+  });
+  assert.equal(invitation.code,201,'Create invitation');
+  assert.match(invitation.data.token,/^[a-f0-9]{64}$/,'Random token is returned one time');
+  assert.equal(invitation.data.expiresInHours,72);
+  const oneTimeToken=invitation.data.token;
+  const pendingList=await call('/api/v1/studio/invitations');
+  assert.equal(pendingList.data.invitations.find(x=>x.id===invitation.data.id).status,'pending');
+  assert.equal(JSON.stringify(pendingList.data).includes(oneTimeToken),false,
+    'Invitation secret is not returned in listings');
+  assert.equal((await call('/api/v1/studio/invitations','POST',{
+    teamId,email:'invited-new@example.test',role:'editor'
+  })).code,409,'Refuse duplicate pending invitation');
+  const ownerCookieForInvite=cookie,ownerCsrfForInvite=csrf;
+  cookie='';csrf='';
+  assert.equal((await call('/api/v1/studio/invitations')).code,401,'Anonymous invitation list denied');
+  assert.equal((await call('/api/v1/invitations/lookup','POST',{token:oneTimeToken})).code,200,
+    'Public token lookup succeeds');
+  assert.equal((await call('/api/v1/invitations/accept','POST',{
+    token:oneTimeToken,name:'Novo integrante',password:'short'
+  })).code,400,'Reject insecure password');
+  const newInvitePassword=randomBytes(24).toString('hex');
+  const acceptance=await call('/api/v1/invitations/accept','POST',{
+    token:oneTimeToken,name:'Novo integrante',password:newInvitePassword
+  });
+  assert.equal(acceptance.code,200,'Accept invitation and create account');
+  assert.equal(acceptance.data.accountCreated,true);
+  assert.equal((await call('/api/v1/invitations/accept','POST',{
+    token:oneTimeToken,name:'Replay',password:newInvitePassword
+  })).code,410,'Single-use tokens cannot be replayed');
+  assert.equal((await call('/api/v1/invitations/lookup','POST',{token:oneTimeToken})).code,410,
+    'Accepted tokens are no longer valid');
+  const invitedLogin=await call('/api/v1/auth/login','POST',{
+    email:'invited-new@example.test',password:newInvitePassword
+  });
+  assert.equal(invitedLogin.code,200,'Invited account can sign in');
+  cookie=invitedLogin.setCookie.split(';')[0];csrf=invitedLogin.data.csrfToken;
+  const invitedStudio=await call('/api/v1/studio/bootstrap');
+  assert.equal(invitedStudio.code,200);
+  assert.deepEqual(invitedStudio.data.teams.map(x=>x.id),[teamId],
+    'Invited editor receives only the invited team');
+  assert.deepEqual(invitedStudio.data.series,[],
+    'Invited team membership does not grant series access without grant');
+  assert.equal((await call('/api/v1/studio/invitations','POST',{
+    teamId,email:'unauthorized@example.test',role:'manager'
+  })).code,403,'Non-manager cannot invite members');
+  cookie=ownerCookieForInvite;csrf=ownerCsrfForInvite;
+
+  const revoked=await call('/api/v1/studio/invitations','POST',{
+    teamId,email:'revoked@example.test',role:'viewer'
+  });
+  assert.equal(revoked.code,201,'Create revocable invitation');
+  assert.equal((await call('/api/v1/studio/invitations/'+revoked.data.id,'DELETE')).code,200,
+    'Admin revokes unused invite');
+  cookie='';csrf='';
+  assert.equal((await call('/api/v1/invitations/lookup','POST',{token:revoked.data.token})).code,410,
+    'Revoked link is invalid');
+  cookie=ownerCookieForInvite;csrf=ownerCsrfForInvite;
+
   const newPass=randomBytes(24).toString('hex');
   const member=await call('/api/v1/studio/members','POST',{
     name:'Integrante QA',email:'qa-team@example.test',password:newPass,teamId,role:'publisher'
   });
   assert.equal(member.code,201,'Create member account and membership');
   assert.equal((await call('/api/v1/studio/members/'+member.data.id,'PUT',{name:'Integrante QA Atualizado',teamId,role:'publisher'})).code,200,'Edit member');
+
+  // Existing accounts join via their OWN authenticated session and CSRF token.
+  const existingInvite=await call('/api/v1/studio/invitations','POST',{
+    teamId:'t1',email:'qa-team@example.test',role:'viewer'
+  });
+  assert.equal(existingInvite.code,201,'Invite an existing account into another team');
+  cookie='';csrf='';
+  assert.equal((await call('/api/v1/invitations/accept','POST',{
+    token:existingInvite.data.token
+  })).code,401,'An existing user must sign in to accept');
+  const accountLogin=await call('/api/v1/auth/login','POST',{
+    email:'qa-team@example.test',password:newPass
+  });
+  assert.equal(accountLogin.code,200);
+  cookie=accountLogin.setCookie.split(';')[0];csrf=accountLogin.data.csrfToken;
+  const signedInCsrf=csrf;csrf='';
+  assert.equal((await call('/api/v1/invitations/accept','POST',{
+    token:existingInvite.data.token
+  })).code,403,'CSRF required when accepting with existing session');
+  csrf=signedInCsrf;
+  const currentUserAccept=await call('/api/v1/invitations/accept','POST',{
+    token:existingInvite.data.token
+  });
+  assert.equal(currentUserAccept.code,200,'Existing account accepts invitation');
+  assert.equal(currentUserAccept.data.accountCreated,false);
+  assert.ok((await call('/api/v1/studio/bootstrap')).data.teams.some(x=>x.id==='t1'),
+    'Existing user now belongs to second team');
+  cookie=ownerCookieForInvite;csrf=ownerCsrfForInvite;
+
+  // Managers may invite to their own team, but cannot invite managers or other teams.
+  const mgrPass=randomBytes(24).toString('hex');
+  const manager=await call('/api/v1/studio/members','POST',{
+    name:'Team Manager CI',email:'ci-manager@example.test',password:mgrPass,
+    teamId,role:'manager'
+  });
+  assert.equal(manager.code,201);
+  const managerLogin=await call('/api/v1/auth/login','POST',{
+    email:'ci-manager@example.test',password:mgrPass
+  });
+  assert.equal(managerLogin.code,200);
+  cookie=managerLogin.setCookie.split(';')[0];csrf=managerLogin.data.csrfToken;
+  assert.equal((await call('/api/v1/studio/invitations','POST',{
+    teamId,email:'member-from-manager@example.test',role:'editor'
+  })).code,201,'Manager invites to own team');
+  assert.equal((await call('/api/v1/studio/invitations','POST',{
+    teamId,email:'other-manager@example.test',role:'manager'
+  })).code,403,'Only admin may invite another manager');
+  assert.equal((await call('/api/v1/studio/invitations','POST',{
+    teamId:'t1',email:'cross-team@example.test',role:'editor'
+  })).code,403,'Manager cannot invite to another team');
+  cookie=ownerCookieForInvite;csrf=ownerCsrfForInvite;
+
   assert.equal((await call('/api/v1/studio/teams/'+teamId,'PUT',{name:'Equipe Atualizada',description:'Atualização persistente'})).code,200,'Edit team');
   const title='CenaLivre Série CI '+randomBytes(4).toString('hex');
   const series=await call('/api/v1/studio/series','POST',{

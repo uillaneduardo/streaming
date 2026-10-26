@@ -142,3 +142,23 @@ assert.match(css,/\.studio-icon/,'Unified Studio icon style');
 assert.ok(!js.includes('style="background-image:${heroImg(s.poster)}"'),
  'Series cards must not rely on empty CSS backgrounds');
 console.log('Referências de mídias, fallback visual e ícones Studio: OK');
+
+for(const part of [
+ 'function invitationList(','function inviteModal(','function invitePage(',
+ 'function createInvitation(','function acceptInvitation(',
+ 'function lookupInvite(','function revokeInvitation(',
+ "if(route.parts[0]==='convite')",
+ "if(action==='invite-open')",
+ "if(action==='invite-copy')",
+ "if(action==='invite-revoke')",
+ "if(action==='invite-login')",
+ "if(action==='invite-accept-existing')",
+ '/api/v1/studio/invitations',
+ '/api/v1/invitations/accept',
+ '/api/v1/invitations/lookup'
+]){
+ assert.ok(js.includes(part),'Missing team invitation UI contract: '+part);
+}
+assert.ok(!js.includes("localStorage.setItem('invite"),
+ 'One-time invitation token must not be stored in localStorage');
+console.log('M1 team invitations and secure acceptance UI contracts: OK');
