@@ -8,6 +8,7 @@ import {registerStudioBulk} from "./studio-bulk.js";
 import {registerStudioEditorial} from "./studio-editorial.js";
 import {registerTeamInvitations} from "./team-invitations.js";
 import {registerMedia} from "./media.js";
+import {registerCategories} from "./categories.js";
 import { publicEpisodeState, sanitizedYoutubeId } from "./domain/release.js";
 
 const app = Fastify({ logger: true, trustProxy: true, bodyLimit:1024*1024 });
@@ -18,6 +19,7 @@ registerStudioBulk(app);
 registerStudioEditorial(app);
 registerTeamInvitations(app);
 registerMedia(app);
+registerCategories(app);
 type Row = RowDataPacket & Record<string, unknown>;
 const records = async (sql:string):Promise<Row[]> => {
   const [rows] = await pool.query<RowDataPacket[]>(sql);
