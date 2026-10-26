@@ -51,10 +51,11 @@ async function uploadOptions(){
 function getHeader(raw:unknown,max=255):string{return typeof raw==="string"&&raw.length<=max?raw:"";}
 function parseMeta(request:FastifyRequest){
  const h=request.headers;
- const name=getHeader(h["x-media-name"],180).trim();
+ let name="";try{name=decodeURIComponent(getHeader(h["x-media-name"],500)).trim().slice(0,180)}catch{name=""}
  const kind=getHeader(h["x-media-kind"],30)||"other";
  const teamId=getHeader(h["x-media-team"],36)||null;
- const tags=getHeader(h["x-media-tags"],1000).split(",").map(x=>x.trim()).filter(Boolean);
+ let tagValue="";try{tagValue=decodeURIComponent(getHeader(h["x-media-tags"],1000))}catch{}
+ const tags=tagValue.split(",").map(x=>x.trim()).filter(Boolean);
  return {name,kind,teamId,tags};
 }
 async function publicReference(id:string){
