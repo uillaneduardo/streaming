@@ -31,6 +31,7 @@ export function validateArtwork(value:unknown):string|null {
   if(value===null||value===undefined||value==="")return null;
   if(typeof value!=="string"||value.length>512)return null;
   if(/^assets\/[a-zA-Z0-9_.-]+\.(svg|png|jpg|jpeg|webp)$/.test(value))return value;
+  if(/^\/api\/v1\/media\/files\/[0-9a-f-]{36}$/i.test(value))return value;
   try {const u=new URL(value);return u.protocol==="https:"&&u.username===""&&u.password===""?value:null;}
   catch{return null;}
 }
