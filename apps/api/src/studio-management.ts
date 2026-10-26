@@ -216,20 +216,23 @@ export function registerStudioManagement(app:FastifyInstance) {
   app.get("/api/v1/studio/settings",async(req,reply)=>{
     const actor=await requireActor(req,reply);if(!actor)return;
     if(!actor.isAdmin)return err(reply,403,"forbidden");
-    const settings=await records("SELECT site_name,site_description,autoplay,contact_email FROM settings WHERE id=1");
+    const settings=await records("SELECT site_name,site_description,autoplay,contact_email,logo_url,icon_url FROM settings WHERE id=1");
     return settings.length?{
       siteName:settings[0].site_name,siteDescription:settings[0].site_description,
-      autoplay:!!settings[0].autoplay,contactEmail:settings[0].contact_email||""
-    }:{siteName:"CenaLivre",siteDescription:"",autoplay:false,contactEmail:""};
+      autoplay:!!settings[0].autoplay,contactEmail:settings[0].contact_email||"",
+      logoUrl:settings[0].logo_url||"",iconUrl:settings[0].icon_url||""
+    }:{siteName:"CenaLivre",siteDescription:"",autoplay:false,contactEmail:"",logoUrl:"",iconUrl:""};
   });
   app.put<{Body:Obj}>("/api/v1/studio/settings",async(req,reply)=>{
     const actor=await requireActor(req,reply,true);if(!actor)return;
     if(!actor.isAdmin)return err(reply,403,"forbidden");
     const title=txt(req.body?.siteName,100),summary=description(req.body?.siteDescription);
     const email=req.body?.contactEmail===""||req.body?.contactEmail==null?"":normalizeEmail(req.body?.contactEmail);
+    const logo=String(req.body?.logoUrl||""),icon=String(req.body?.iconUrl||"");
+    if((logo&&!validateArtwork(logo))||(icon&&!validateArtwork(icon)))return err(reply,400,"invalid_branding");
     if(!title||summary===null||email===null||typeof req.body?.autoplay!=="boolean")return err(reply,400,"invalid_settings");
-    await pool.execute("INSERT INTO settings(id,site_name,site_description,autoplay,contact_email) VALUES(1,?,?,?,?) ON DUPLICATE KEY UPDATE site_name=VALUES(site_name),site_description=VALUES(site_description),autoplay=VALUES(autoplay),contact_email=VALUES(contact_email)",
-      [title,summary,req.body.autoplay,email]);
+    await pool.execute("INSERT INTO settings(id,site_name,site_description,autoplay,contact_email,logo_url,icon_url) VALUES(1,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE site_name=VALUES(site_name),site_description=VALUES(site_description),autoplay=VALUES(autoplay),contact_email=VALUES(contact_email),logo_url=VALUES(logo_url),icon_url=VALUES(icon_url)",
+      [title,summary,req.body.autoplay,email,logo||null,icon||null]);
     await audit(actor.id,"settings.updated","settings","1");
     return {ok:true};
   });
