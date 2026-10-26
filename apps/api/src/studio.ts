@@ -15,11 +15,11 @@ const text=(s:unknown,max:number)=>typeof s==="string"&&s.trim().length>0&&s.tri
 async function log(user:string,action:string,target:string,id:string){
   await pool.execute("INSERT INTO audit_log(id,actor_id,action,target_type,target_id) VALUES(?,?,?,?,?)",[randomUUID(),user,action,target,id]);
 }
-async function teamManager(actor:Actor,teamId:string){
+export async function teamManager(actor:Actor,teamId:string){
   if(actor.isAdmin)return true;
   return (await rows("SELECT 1 FROM team_members WHERE user_id=? AND team_id=? AND role='manager'",[actor.id,teamId])).length>0;
 }
-async function seriesPermission(actor:Actor,sid:string,kind:"read"|"edit"|"publish"){
+export async function seriesPermission(actor:Actor,sid:string,kind:"read"|"edit"|"publish"){
   if(actor.isAdmin)return true;
   if((await rows(`SELECT 1 FROM series_teams st JOIN team_members m ON m.team_id=st.team_id
     WHERE st.series_id=? AND m.user_id=? AND m.role='manager' LIMIT 1`,[sid,actor.id])).length)return true;
