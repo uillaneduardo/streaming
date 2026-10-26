@@ -105,7 +105,7 @@ async function saveRemoteEntity(form){
       if(payload.startAt&&payload.endAt&&payload.endAt<=payload.startAt){toast('O fim da campanha precisa ser posterior ao início.');return;}
     }else if(type==='seasons'){
       path='/api/v1/studio/seasons'+(id?'/'+encodeURIComponent(id):'');
-      payload={seriesId:pick('seriesId'),number:Number(pick('number')),title:pick('title')};
+      payload={seriesId:pick('seriesId'),number:Number(pick('number')),title:pick('title'),status:pick('status')||'draft'};
     }else if(type==='episodes'){
       path='/api/v1/studio/episodes'+(id?'/'+encodeURIComponent(id):'');
       const release=pick('releaseAt'),end=pick('endAt');
@@ -729,7 +729,9 @@ if(hosted&&!route.studio&&publicLoadState!=='ready'){
 if(route.studio){
   if(hosted&&!studioUser){root.innerHTML=studioLogin();return}
   if(hosted&&!studioData){root.innerHTML=publicNav()+'<main class="container"><p>Carregando Studio...</p></main>';return}
-  root.innerHTML=studioPage();return
+  root.innerHTML=studioPage();
+  if(['series','seasons','episodes'].includes(route.parts[1]))syncCatalogSelection(route.parts[1]);
+  return
 }let content=route.path==='/'?home():route.parts[0]==='explorar'?explore():route.parts[0]==='serie'?seriesPage(route.parts[1]):route.parts[0]==='assistir'?watchPage(route.parts[1]):route.parts[0]==='entrar'?'<main class="container"><button class="btn primary" data-action="go-studio">Entrar no Studio</button></main>':missing();root.innerHTML=publicNav()+content+`<footer class="footer">CenaLivre · Séries independentes</footer>`;
 if(route.parts[0]==='assistir'&&activeVideo===route.parts[1]){
  const episode=by('episodes',route.parts[1]);
@@ -739,7 +741,7 @@ if(route.parts[0]==='assistir'&&activeVideo===route.parts[1]){
 }
 function modal(title,body){document.getElementById('modal-root').innerHTML=`<div class="modal-backdrop" data-action="close-modal"><div class="modal form-surface-light" role="dialog" aria-modal="true" aria-label="${esc(title)}"><div class="row between"><h2>${esc(title)}</h2><button class="btn small" data-action="close-modal">✕</button></div>${body}</div></div>`}
 const field=(label,name,value='',type='text',extra='')=>`<div class="field"><label>${label}</label><input class="input" name="${name}" type="${type}" value="${esc(value)}" ${extra}></div>`;const area=(label,name,value='')=>`<div class="field span2"><label>${label}</label><textarea class="textarea" name="${name}">${esc(value)}</textarea></div>`;const select=(label,name,opts,selected)=>`<div class="field"><label>${label}</label><select class="select" name="${name}">${opts.map(x=>`<option value="${esc(x.id)}" ${x.id===selected?'selected':''}>${esc(x.title||x.name)}</option>`).join('')}</select></div>`;const submit=`<div class="span2 row between" style="margin-top:12px"><button type="button" class="btn" data-action="close-modal">Cancelar</button><button type="submit" class="btn primary">Salvar alterações</button></div>`;
-function openEditor(type,entityId){const editing=!!entityId,x=editing?by(type,entityId):null;let body='';if(type==='series'){body=`<form class="form-grid" data-form="series" data-id="${entityId||''}">${field('Título','title',x?.title,'text','required')}${field('Categoria','category',x?.category||'Documentário','text','required')}${area('Sinopse','summary',x?.summary)}${mediaField('Pôster vertical','poster',x?.poster||img('new-poster',650,900),'poster')}${mediaField('Banner horizontal','banner',x?.banner||img('new-banner',1300,700),'banner')}<div class="field span2"><label>Equipes responsáveis (selecione uma ou mais)</label><div class="pillset">${db.teams.map(t=>`<label class="pill"><input type="checkbox" name="teamIds" value="${t.id}" ${(x?.teamIds||[]).includes(t.id)?'checked':''}> ${esc(t.name)}</label>`).join('')}</div></div><label class="span2"><input type="checkbox" name="featured" ${x?.featured?'checked':''}> Destaque no portal</label>${submit}</form>`}else if(type==='seasons'){body=`<form class="form-grid" data-form="seasons" data-id="${entityId||''}">${select('Série','seriesId',db.series,x?.seriesId)}${field('Número','number',x?.number||seasons(db.series[0]?.id).length+1,'number','min="1" required')}${field('Título da temporada','title',x?.title||'Nova temporada','text','required')}${submit}</form>`}else if(type==='episodes'){body=`<form class="form-grid" data-form="episodes" data-id="${entityId||''}">${select('Temporada','seasonId',db.seasons.map(s=>({...s,title:`${by('series',s.seriesId)?.title} — T${s.number}`})),x?.seasonId)}${field('Número do episódio','number',x?.number||1,'number','min="1" required')}${field('Título','title',x?.title,'text','required')}${field('Duração estimada (min)','duration',x?.duration||20,'number','min="1"')}${area('Sinopse','summary',x?.summary)}${field('URL ou ID do vídeo YouTube','youtube',x?.youtube)}${mediaField('Thumbnail do episódio','thumbnail',x?.thumbnail||img('new-episode',1200,700),'thumbnail')}${field('Disponível a partir de','releaseAt',(x?datetimeLocal(x.releaseAt):future(1)),'datetime-local','required')}${field('Disponível até (opcional)','endAt',(x?datetimeLocal(x.endAt):''),'datetime-local')}${select('Estado editorial','status',[{id:'published',title:'Aprovado / publicado'},{id:'scheduled',title:'Agendado'},{id:'draft',title:'Rascunho'},{id:'suspended',title:'Suspenso'}],x?.status||'scheduled')}${submit}</form>`}else if(type==='banners'){body=`<form class="form-grid" data-form="banners" data-id="${entityId||''}">${field('Título','title',x?.title,'text','required')}${field('Prioridade (menor primeiro)','order',x?.order||1,'number','min="1"')}${area('Texto de apoio','subtitle',x?.subtitle)}${mediaField('Banner desktop','image',x?.image||img('new-campaign',1400,800),'banner')}${mediaField('Banner mobile (opcional)','mobileImage',x?.mobileImage,'banner')}${select('Destino: série','target',db.series,x?.target)}${field('Início da campanha','startAt',(x?datetimeLocal(x.startAt):future(1)),'datetime-local')}${field('Fim da campanha','endAt',(x?datetimeLocal(x.endAt):''),'datetime-local')}<label class="span2"><input type="checkbox" name="active" ${x?.active!==false?'checked':''}> Campanha habilitada</label>${submit}</form>`}else if(type==='teams'){body=`<form class="form-grid" data-form="teams" data-id="${entityId||''}">${field('Nome da equipe','name',x?.name,'text','required')}${field('Descrição','description',x?.description)}${submit}</form>`}else if(type==='members'){body=`<form class="form-grid" data-form="members" data-id="${entityId||''}">${field('Nome','name',x?.name,'text','required')}${field('E-mail','email',x?.email,'email','required')}${select('Equipe','teamId',db.teams,x?.teamId)}${select('Papel na equipe','role',[{id:'Gestora',title:'Gestora'},{id:'Produtor',title:'Produtor'},{id:'Editor',title:'Editor'},{id:'Publicador',title:'Publicador'},{id:'Colaborador',title:'Colaborador'}],x?.role||'Editor')}${submit}</form>`}else if(type==='media'){body=`<form class="form-grid" data-form="media">${field('Nome do arquivo','name','','text','required')}${field('URL da imagem','url','','url','required')}${submit}</form>`}if(hosted&&type==='series'){
+function openEditor(type,entityId){const editing=!!entityId,x=editing?by(type,entityId):null;let body='';if(type==='series'){body=`<form class="form-grid" data-form="series" data-id="${entityId||''}">${field('Título','title',x?.title,'text','required')}${field('Categoria','category',x?.category||'Documentário','text','required')}${area('Sinopse','summary',x?.summary)}${mediaField('Pôster vertical','poster',x?.poster||img('new-poster',650,900),'poster')}${mediaField('Banner horizontal','banner',x?.banner||img('new-banner',1300,700),'banner')}<div class="field span2"><label>Equipes responsáveis (selecione uma ou mais)</label><div class="pillset">${db.teams.map(t=>`<label class="pill"><input type="checkbox" name="teamIds" value="${t.id}" ${(x?.teamIds||[]).includes(t.id)?'checked':''}> ${esc(t.name)}</label>`).join('')}</div></div><label class="span2"><input type="checkbox" name="featured" ${x?.featured?'checked':''}> Destaque no portal</label>${submit}</form>`}else if(type==='seasons'){body=`<form class="form-grid" data-form="seasons" data-id="${entityId||''}">${select('Série','seriesId',db.series,x?.seriesId)}${field('Número','number',x?.number||seasons(db.series[0]?.id).length+1,'number','min="1" required')}${field('Título da temporada','title',x?.title||'Nova temporada','text','required')}${select('Estado da temporada','status',catalogStatuses.seasons.map(t=>({id:t.id,title:t.name})),x?.status||'draft')}${submit}</form>`}else if(type==='episodes'){body=`<form class="form-grid" data-form="episodes" data-id="${entityId||''}">${select('Temporada','seasonId',db.seasons.map(s=>({...s,title:`${by('series',s.seriesId)?.title} — T${s.number}`})),x?.seasonId)}${field('Número do episódio','number',x?.number||1,'number','min="1" required')}${field('Título','title',x?.title,'text','required')}${field('Duração estimada (min)','duration',x?.duration||20,'number','min="1"')}${area('Sinopse','summary',x?.summary)}${field('URL ou ID do vídeo YouTube','youtube',x?.youtube)}${mediaField('Thumbnail do episódio','thumbnail',x?.thumbnail||img('new-episode',1200,700),'thumbnail')}${field('Disponível a partir de','releaseAt',(x?datetimeLocal(x.releaseAt):future(1)),'datetime-local','required')}${field('Disponível até (opcional)','endAt',(x?datetimeLocal(x.endAt):''),'datetime-local')}${select('Estado editorial','status',[{id:'published',title:'Aprovado / publicado'},{id:'scheduled',title:'Agendado'},{id:'draft',title:'Rascunho'},{id:'suspended',title:'Suspenso'}],x?.status||'scheduled')}${submit}</form>`}else if(type==='banners'){body=`<form class="form-grid" data-form="banners" data-id="${entityId||''}">${field('Título','title',x?.title,'text','required')}${field('Prioridade (menor primeiro)','order',x?.order||1,'number','min="1"')}${area('Texto de apoio','subtitle',x?.subtitle)}${mediaField('Banner desktop','image',x?.image||img('new-campaign',1400,800),'banner')}${mediaField('Banner mobile (opcional)','mobileImage',x?.mobileImage,'banner')}${select('Destino: série','target',db.series,x?.target)}${field('Início da campanha','startAt',(x?datetimeLocal(x.startAt):future(1)),'datetime-local')}${field('Fim da campanha','endAt',(x?datetimeLocal(x.endAt):''),'datetime-local')}<label class="span2"><input type="checkbox" name="active" ${x?.active!==false?'checked':''}> Campanha habilitada</label>${submit}</form>`}else if(type==='teams'){body=`<form class="form-grid" data-form="teams" data-id="${entityId||''}">${field('Nome da equipe','name',x?.name,'text','required')}${field('Descrição','description',x?.description)}${submit}</form>`}else if(type==='members'){body=`<form class="form-grid" data-form="members" data-id="${entityId||''}">${field('Nome','name',x?.name,'text','required')}${field('E-mail','email',x?.email,'email','required')}${select('Equipe','teamId',db.teams,x?.teamId)}${select('Papel na equipe','role',[{id:'Gestora',title:'Gestora'},{id:'Produtor',title:'Produtor'},{id:'Editor',title:'Editor'},{id:'Publicador',title:'Publicador'},{id:'Colaborador',title:'Colaborador'}],x?.role||'Editor')}${submit}</form>`}else if(type==='media'){body=`<form class="form-grid" data-form="media">${field('Nome do arquivo','name','','text','required')}${field('URL da imagem','url','','url','required')}${submit}</form>`}if(hosted&&type==='series'){
   if(editing){
     body=body.replaceAll('name="teamIds"','name="teamIds" disabled');
     body+='<p class="notice">Equipes responsáveis não podem ser alteradas após a criação nesta etapa.</p>';
@@ -769,6 +771,69 @@ if(hosted&&type==='episodes'&&editing)body=body.replace('name="seasonId"','name=
 modal((editing?'Editar ':'Adicionar ')+({series:'série',seasons:'temporada',episodes:'episódio',banners:'banner',teams:'equipe',members:'integrante',media:'mídia'}[type]),body)}
 
 const catalogSingular={series:'série',seasons:'temporada',episodes:'episódio'};
+
+function bulkDescription(type,action,status){
+ const names={series:'séries',seasons:'temporadas',episodes:'episódios'};
+ if(action==='delete')return 'Excluir '+names[type];
+ const label=catalogStatuses[type].find(x=>x.id===status)?.name||status;
+ return 'Alterar para '+label.toLowerCase();
+}
+function openBulkConfirmation(type){
+ const choices=catalogSelection[type];if(!choices?.size)return;
+ if(choices.size>100){toast('Selecione até 100 itens por operação.');return;}
+ const picker=document.querySelector('[data-bulk-action="'+type+'"]');
+ const chosen=picker?.value||'';
+ if(!chosen){toast('Selecione uma ação.');return;}
+ const action=chosen==='delete'?'delete':'set_status';
+ const status=action==='set_status'?chosen.slice(7):null;
+ if(action==='set_status'&&!catalogStatuses[type].some(x=>x.id===status))return;
+ const ids=[...choices];
+ const names=ids.map(id=>by(type,id)?.title).filter(Boolean);
+ const lines=names.slice(0,5).map(name=>'<li>'+esc(name)+'</li>').join('');
+ const warning=action==='delete'?
+  'A exclusão é permanente. Séries com temporadas ou banners e temporadas com episódios não poderão ser excluídas.':
+  'A mudança afeta a disponibilidade do conteúdo no portal, conforme a visibilidade da série e as datas de estreia.';
+ const msg='Se algum conteúdo não puder ser alterado, nenhum item da seleção será modificado.';
+ modal(bulkDescription(type,action,status),
+  '<div class="catalog-bulk-confirm">'+
+  '<p><strong>'+ids.length+' '+(ids.length===1?'item selecionado':'itens selecionados')+'</strong></p>'+
+  '<ul>'+lines+(ids.length>5?'<li>e mais '+(ids.length-5)+'...</li>':'')+'</ul>'+
+  '<p class="muted">'+esc(warning)+'</p><p class="muted tiny">'+esc(msg)+'</p>'+
+  '<div class="row between"><button type="button" class="btn" data-action="close-modal">Cancelar</button>'+
+  '<button type="button" class="btn primary '+(action==='delete'?'catalog-confirm-danger':'')+
+  '" data-action="bulk-confirm" data-type="'+type+'" data-operation="'+action+
+  '" data-status="'+esc(status||'')+'">Confirmar '+(action==='delete'?'exclusão':'alteração')+'</button></div></div>');
+}
+async function performBulkOperation(type,action,status,button){
+ const items=[...catalogSelection[type]];
+ if(!items.length)return;
+ if(button)button.disabled=true;
+ try{
+  const response=await apiRequest('/api/v1/studio/bulk',{method:'POST',
+   body:JSON.stringify({resource:type,action,ids:items,...(action==='set_status'?{status}:{})})});
+  await fetchStudioData();
+  await refreshPublicCatalog();
+  catalogSelection[type].clear();
+  document.getElementById('modal-root').innerHTML='';
+  render();
+  toast(response.count+' '+(response.count===1?'item atualizado.':'itens atualizados.'));
+ }catch(error){
+  const messages={
+   invalid_bulk_request:'Seleção inválida. Escolha até 100 itens diferentes.',
+   invalid_status:'O status selecionado é inválido.',
+   item_not_found:'Um item selecionado não existe mais. Atualize a lista.',
+   forbidden:'Sua conta não tem permissão para alterar um dos itens.',
+   publish_denied:'Você não tem permissão para publicar ou retirar um dos itens.',
+   episode_missing_release_date:'Preencha a data de estreia dos episódios antes de publicar ou agendar.',
+   series_has_seasons:'Uma das séries possui temporadas. Remova-as antes da exclusão.',
+   series_has_banners:'Uma das séries está vinculada a banners. Desvincule-os antes da exclusão.',
+   season_has_episodes:'Uma das temporadas contém episódios. Remova-os antes da exclusão.'
+  };
+  toast(messages[error.message]||error.message||'Não foi possível concluir a ação.');
+  if(button)button.disabled=false;
+ }
+}
+
 function openCatalogDelete(type,id){
  const entity=by(type,id);if(!entity)return;
  const name=entity.title||entity.name||'Item';
@@ -813,6 +878,15 @@ function formSubmit(form){const type=form.dataset.form;if(!type)return;
 if(hosted){if(['series','seasons','episodes','teams','members','banners'].includes(type)){void saveRemoteEntity(form);}else toast('Esta operação ainda não está habilitada.');return;}
 const f=new FormData(form),v=Object.fromEntries(f.entries());if(type==='episodes'&&v.endAt&&v.releaseAt&&new Date(v.endAt)<=new Date(v.releaseAt)){toast('O término precisa ser posterior à estreia.');return}if(type==='banners'&&v.endAt&&v.startAt&&new Date(v.endAt)<=new Date(v.startAt)){toast('O fim da campanha precisa ser posterior ao início.');return}if(type==='series'){v.slug=slug(v.title);v.teamIds=f.getAll('teamIds');v.featured=f.has('featured')}if(type==='banners'){v.active=f.has('active');v.order=Number(v.order)||1}if(type==='episodes'){v.number=Number(v.number);v.duration=Number(v.duration);v.status=v.status||'scheduled'}if(type==='seasons')v.number=Number(v.number);if(type==='series'&&!v.teamIds.length){toast('Selecione uma equipe responsável.');return}const old=form.dataset.id&&by(type,form.dataset.id);if(old)Object.assign(old,v);else db[type].push({id:id(type[0]),...v});save();document.getElementById('modal-root').innerHTML='';render();toast('Alterações salvas.')}
 function handle(action,el){const eid=el.dataset.id;
+if(action==='bulk-clear'){
+ const type=el.dataset.type;if(catalogSelection[type]){catalogSelection[type].clear();refreshCatalogTable(type);}
+ return;
+}
+if(action==='bulk-apply'){openBulkConfirmation(el.dataset.type);return;}
+if(action==='bulk-confirm'){
+ void performBulkOperation(el.dataset.type,el.dataset.operation,el.dataset.status,el);return;
+}
+
 if(action==='create-season'){
  if(!db.series.length){toast('Crie uma série antes de cadastrar temporadas.');return;}
  openEditor('seasons');
@@ -918,6 +992,27 @@ if(e.target.id==='upload-settings-form'){
 if(e.target.id==='studio-login'){void loginStudio(e.target);return;}
 if(hosted&&e.target.id==='settings-form'){void saveRemoteSettings(e.target);return;}
 if(e.target.id==='settings-form'){const f=new FormData(e.target);db.preferences={siteName:f.get('siteName'),siteDescription:f.get('siteDescription'),autoplay:f.has('autoplay')};save();toast('Preferências salvas.')}else formSubmit(e.target)});document.addEventListener('change',e=>{
+if(e.target.matches('[data-bulk-row]')){
+ const type=e.target.dataset.bulkRow;
+ if(catalogSelection[type]){
+  if(e.target.checked)catalogSelection[type].add(e.target.value);
+  else catalogSelection[type].delete(e.target.value);
+  syncCatalogSelection(type);
+ }return;
+}
+if(e.target.matches('[data-bulk-select-all]')){
+ const type=e.target.dataset.bulkSelectAll;
+ if(catalogSelection[type]){
+  for(const row of catalogItems(type)){
+   if(e.target.checked)catalogSelection[type].add(row.id);
+   else catalogSelection[type].delete(row.id);
+  }
+  refreshCatalogTable(type);
+ }return;
+}
+if(e.target.matches('[data-bulk-action]')){
+ syncCatalogSelection(e.target.dataset.bulkAction);return;
+}
 if(e.target.matches('[data-catalog-filter]')){
  const type=e.target.closest('[data-catalog-type]')?.dataset.catalogType;
  if(type&&catalogFilters[type]){
