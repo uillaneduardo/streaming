@@ -213,6 +213,60 @@ export function registerStudioManagement(app:FastifyInstance) {
     await audit(actor.id,"episode.updated","episode",id);
     return {ok:true};
   });
+  // Deletion never cascades editorial content silently. Editors must clear dependents first.
+  app.delete<{Params:{id:string}}>("/api/v1/studio/series/:id",async(req,reply)=>{
+    const actor=await requireActor(req,reply,true);if(!actor)return;
+    const id=req.params.id;if(!goodId(id))return err(reply,400,"invalid_id");
+    const current=await records("SELECT visibility FROM series WHERE id=?",[id]);
+    if(!current.length)return err(reply,404,"series_not_found");
+    if(!await seriesPermission(actor,id,"edit"))return err(reply,403,"forbidden");
+    if(current[0].visibility==="public"&&!await seriesPermission(actor,id,"publish"))
+      return err(reply,403,"publish_denied");
+    const [seasons,banners]=await Promise.all([
+      records("SELECT 1 FROM seasons WHERE series_id=? LIMIT 1",[id]),
+      records("SELECT 1 FROM banners WHERE target_series_id=? LIMIT 1",[id])
+    ]);
+    if(seasons.length)return err(reply,409,"series_has_seasons");
+    if(banners.length)return err(reply,409,"series_has_banners");
+    const con=await pool.getConnection();
+    try{
+      await con.beginTransaction();
+      await con.execute("DELETE FROM series_grants WHERE series_id=?",[id]);
+      await con.execute("DELETE FROM series_teams WHERE series_id=?",[id]);
+      const [out]=await con.execute<any>("DELETE FROM series WHERE id=?",[id]);
+      if(!out.affectedRows){await con.rollback();return err(reply,404,"series_not_found");}
+      await con.commit();
+    }catch(error){await con.rollback();throw error;}
+    finally{con.release();}
+    await audit(actor.id,"series.deleted","series",id);
+    return {ok:true};
+  });
+  app.delete<{Params:{id:string}}>("/api/v1/studio/seasons/:id",async(req,reply)=>{
+    const actor=await requireActor(req,reply,true);if(!actor)return;
+    const id=req.params.id;if(!goodId(id))return err(reply,400,"invalid_id");
+    const old=await records("SELECT series_id FROM seasons WHERE id=?",[id]);
+    if(!old.length)return err(reply,404,"season_not_found");
+    if(!await seriesPermission(actor,String(old[0].series_id),"edit"))return err(reply,403,"forbidden");
+    if((await records("SELECT 1 FROM episodes WHERE season_id=? LIMIT 1",[id])).length)
+      return err(reply,409,"season_has_episodes");
+    await pool.execute("DELETE FROM seasons WHERE id=?",[id]);
+    await audit(actor.id,"season.deleted","season",id);
+    return {ok:true};
+  });
+  app.delete<{Params:{id:string}}>("/api/v1/studio/episodes/:id",async(req,reply)=>{
+    const actor=await requireActor(req,reply,true);if(!actor)return;
+    const id=req.params.id;if(!goodId(id))return err(reply,400,"invalid_id");
+    const old=await records("SELECT season_id,status FROM episodes WHERE id=?",[id]);
+    if(!old.length)return err(reply,404,"episode_not_found");
+    const parent=await seasonSeries(String(old[0].season_id));
+    if(!parent)return err(reply,404,"series_not_found");
+    if(!await seriesPermission(actor,parent,"edit"))return err(reply,403,"forbidden");
+    if(old[0].status==="published"&&!await seriesPermission(actor,parent,"publish"))
+      return err(reply,403,"publish_denied");
+    await pool.execute("DELETE FROM episodes WHERE id=?",[id]);
+    await audit(actor.id,"episode.deleted","episode",id);
+    return {ok:true};
+  });
   const bannerData=(body:Obj)=>{
     const title=txt(body.title,180),subtitle=typeof body.subtitle==="string"&&body.subtitle.length<=10000?body.subtitle:null;
     const image=safePath(body.image),mobile=body.mobileImage?safePath(body.mobileImage):null;
