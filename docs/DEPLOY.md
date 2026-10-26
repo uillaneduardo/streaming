@@ -1,14 +1,18 @@
-# Deploy inicial (somente protótipo estático)
-
+# Deploy no homelab (fase de separação)
+O PR desta fase ainda precisa ser mergeado. Após merge, no Ubuntu Server:
 ```bash
-git clone https://github.com/uillaneduardo/streaming.git
-cd streaming
-docker compose up -d --build
-docker compose ps
+cd ~/homelab/apps/streaming
+git pull --ff-only origin main
+cp -n .env.example .env
+# Edite .env e substitua as senhas de desenvolvimento por valores fortes e distintos
+sudo docker compose config --quiet
+sudo docker compose up -d --build
+sudo docker compose ps
+curl -fsS http://127.0.0.1:8088/api/v1/health
+curl -fsS http://127.0.0.1:8088/api/v1/public/bootstrap
 ```
+O portal: `http://IP-DO-HOMELAB:8088`.
+Os vídeos são incorporados via YouTube; não são hospedados localmente.
+O Studio por enquanto apenas simula operações com `localStorage` e **não possui autenticação**. Evite disponibilizá-lo externamente até a próxima fase. A API é somente leitura.
 
-Abrir `http://IP-DO-HOMELAB:8088`.
-
-Atualizar: `git pull --ff-only && docker compose up -d --build`.
-
-A implantação inicial contém apenas Nginx servindo o site demonstrativo; não há API, banco de dados ou autenticação implementados. Só configure Cloudflare Tunnel após revisar exposição e segurança. Para produção, implantar por tag testada e não por branch em andamento.
+Atualizações posteriores: `git pull --ff-only origin main && sudo docker compose up -d --build`. Execute migrações versionadas antes de novas releases.
