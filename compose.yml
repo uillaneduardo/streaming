@@ -37,7 +37,7 @@ services:
       - ./apps/api/sql/:/migrations/:ro
     entrypoint: ["/bin/sh","-ec"]
     command:
-      - 'for sql in /migrations/*.sql; do mariadb -h db -u "$DB_USER" "$DB_NAME" < "$sql"; done'
+      - 'for sql in /migrations/*.sql; do mariadb -h db -u "$$DB_USER" "$$DB_NAME" < "$$sql"; done'
     depends_on:
       db:
         condition: service_healthy
