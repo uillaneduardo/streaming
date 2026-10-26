@@ -75,3 +75,21 @@ assert.match(dockerfile,/version\.json/,'Image includes version manifest');
 assert.match(dockerfile,/\?v=\$\{fingerprint\}/,'HTML uses fingerprinted assets');
 assert.match(nginx,/Cache-Control "no-store, no-cache/,'Nginx must disable caching for app shell');
 console.log('Version handshake, stale catalogue protection and player controls: OK');
+
+for(const type of ['series','seasons','episodes']){
+ assert.match(js,new RegExp("function "+type+"Admin\\(\\)"),type+' manager exists');
+ assert.ok(js.includes("data-catalog-table"),'editorial table');
+}
+for(const action of ['delete-series','delete-season','delete-episode','catalog-confirm-delete','catalog-clear']){
+ assert.ok(js.includes(action),'missing editorial action '+action);
+}
+assert.match(js,/data-catalog-search/);
+assert.match(js,/data-catalog-filter/);
+assert.match(js,/function refreshCatalogTable/);
+assert.match(js,/function openCatalogDelete/);
+assert.match(css,/\.catalog-toolbar/);
+assert.match(css,/\.catalog-row-actions/);
+for(const forbidden of ['homelab','MariaDB','Sessão autenticada','Docker']){
+ assert.ok(!js.includes(forbidden),'Technical UI copy must not mention '+forbidden);
+}
+console.log('CRUD de séries, temporadas e episódios, filtros e copy limpa: OK');

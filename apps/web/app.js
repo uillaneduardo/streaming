@@ -56,7 +56,7 @@ async function logoutStudio(){
   studioUser=null;csrfToken='';studioData=null;nav('/');render();
 }
 function studioLogin(){
-  return publicNav()+'<main class="container" style="max-width:520px;margin:60px auto 120px"><div class="auth-panel form-surface-light"><h1>Entrar no Studio</h1><p class="muted">Acesso reservado às equipes autorizadas.</p><form id="studio-login" class="stack">'+
+  return publicNav()+'<main class="container" style="max-width:520px;margin:60px auto 120px"><div class="auth-panel form-surface-light"><h1>Entrar no Studio</h1><p class="muted">Acesse seu painel de produção.</p><form id="studio-login" class="stack">'+
     '<div class="field"><label>E-mail</label><input class="input" type="email" name="email" autocomplete="username" required></div>'+
     '<div class="field"><label>Senha</label><input class="input" type="password" name="password" autocomplete="current-password" required></div>'+
     '<button class="btn primary" type="submit">Entrar</button></form></div></main>';
@@ -113,7 +113,7 @@ async function saveRemoteEntity(form){
       payload={seasonId:pick('seasonId')||(id?by('episodes',id)?.seasonId:''),number:Number(pick('number')),title:pick('title'),
         summary:pick('summary'),duration:Number(pick('duration')||20),youtube:pick('youtube'),
         thumbnail:pick('thumbnail'),releaseAt:isoFromInput(release),endAt:isoFromInput(end),status:pick('status')};
-    }else{toast('Esta operação ainda não está habilitada no servidor.');return}
+    }else{toast('Esta opção ainda não está disponível.');return}
     const btn=form.querySelector('[type="submit"]');if(btn)btn.disabled=true;
     await apiRequest(path,{method,body:JSON.stringify(payload)});
     if(type==='series'&&id&&studioUser?.isAdmin&&pick('visibility')&&
@@ -124,7 +124,7 @@ async function saveRemoteEntity(form){
     await fetchStudioData();
     if(type==='series'||type==='seasons'||type==='episodes'||type==='banners')await refreshPublicCatalog();
     document.getElementById('modal-root').innerHTML='';
-    render();toast('Alterações salvas no servidor.');
+    render();toast('Alterações salvas.');
   }catch(error){toast(error.message||'Não foi possível salvar.');const btn=form.querySelector('[type="submit"]');if(btn)btn.disabled=false;}
 }
 async function saveRemoteSettings(form){
@@ -136,7 +136,7 @@ async function saveRemoteSettings(form){
     logoUrl:String(f.get('logoUrl')||'').trim(),iconUrl:String(f.get('iconUrl')||'').trim()};
   try{
     await apiRequest('/api/v1/studio/settings',{method:'PUT',body:JSON.stringify(payload)});
-    await fetchStudioData();await refreshPublicCatalog();toast('Configurações salvas no servidor.');
+    await fetchStudioData();await refreshPublicCatalog();toast('Configurações salvas.');
   }catch(error){toast(error.message||'Não foi possível atualizar configurações.')}
 }
 
@@ -200,7 +200,7 @@ function mediaField(label,name,value='',kind='other'){
   '<button type="button" class="btn small" data-action="media-choose" data-field="'+esc(name)+'" data-kind="'+esc(kind)+'">▧ Escolher mídia</button>'+
   '<label class="btn small media-inline-upload-btn">↑ Enviar imagem<input type="file" class="media-inline-file" accept="image/png,image/jpeg,image/webp,image/gif" aria-label="Enviar '+esc(label)+'"></label>'+
   '<button type="button" class="btn small media-inline-clear" data-action="media-clear" data-field="'+esc(name)+'" aria-label="Limpar seleção" '+(value?'':'hidden')+'>×</button>'+'</div>'+
-  '<small class="media-inline-hint">Imagem do homelab ou já cadastrada na Biblioteca</small></div></div>'+
+  '<small class="media-inline-hint">Escolha uma imagem existente ou envie outra.</small></div></div>'+
   '<div class="media-inline-status" role="status" aria-live="polite"></div>'+
   '<progress class="media-inline-progress" max="100" value="0" hidden></progress>'+
   '<details class="media-manual-url"><summary>Inserir URL manualmente</summary><input class="input" name="'+esc(name)+'" value="'+esc(value)+'" placeholder="/api/v1/media/files/... ou URL HTTPS" autocomplete="off"></details></div>';
@@ -257,13 +257,13 @@ function uploadProgressRequest(file,{name,kind,teamId,tags},onProgress,method='P
    xhr.setRequestHeader('x-media-tags',encodeURIComponent(tags||'').slice(0,1000));
   }
   xhr.upload.onprogress=e=>{if(e.lengthComputable)onProgress?.(Math.round(e.loaded*100/e.total))};
-  xhr.onerror=()=>reject(new Error('Erro de rede. Verifique a conexão com o homelab.'));
+  xhr.onerror=()=>reject(new Error('Não foi possível enviar a imagem. Verifique sua conexão.'));
   xhr.ontimeout=()=>reject(new Error('O upload excedeu o tempo de espera.'));
   xhr.onload=()=>{
    let result;try{result=JSON.parse(xhr.responseText)}catch{result={}}
    if(xhr.status>=200&&xhr.status<300)return resolve(result);
-   const errors={request_entity_too_large:'O arquivo excede o limite do servidor (HTTP 413).',
-    file_too_large:'Arquivo acima do limite configurado.',unsupported_file_format:'Formato não aceito pelo servidor.',
+   const errors={request_entity_too_large:'Arquivo acima do limite de envio.',
+    file_too_large:'Arquivo acima do limite configurado.',unsupported_file_format:'Formato de arquivo não permitido.',
     media_limit_reached:'Capacidade da Biblioteca atingida.',forbidden:'Sua equipe não tem autorização.',
     unauthorized:'Sessão expirada, entre novamente.',csrf_required:'Sessão inválida, recarregue o Studio.'};
    reject(new Error(errors[result.error]||result.error||'Falha ao enviar imagem (HTTP '+xhr.status+').'));
@@ -287,12 +287,12 @@ async function uploadInlineMedia(input){
   const result=await uploadProgressRequest(file,{name:file.name,kind:card?.dataset.mediaKind||'other',
    teamId:mediaUploadTeam(manual?.name||''),tags:''},
    percent=>{if(progress)progress.value=percent;if(status)status.textContent='Enviando '+file.name+' · '+percent+'%';});
-  if(!result?.url)throw new Error('Servidor não retornou a URL da imagem.');
+  if(!result?.url)throw new Error('Não foi possível concluir o envio da imagem.');
   await fetchMedia();
   assignMediaToField(manual?.name||'',result.url);
-  if(status)status.textContent='✓ Imagem salva no homelab. '+file.name;
+  if(status)status.textContent='✓ Upload concluído: '+file.name;
   if(progress)progress.value=100;
-  toast('Imagem enviada e vinculada ao formulário.');
+  toast('Imagem enviada e selecionada.');
  }catch(error){
   if(thumb)thumb.innerHTML=oldPreview||'';
   if(manual)manual.value=original;
@@ -337,7 +337,7 @@ async function uploadFromPicker(file){
    assignMediaToField(mediaPickerField,result.url);
    closeMediaPicker();
   }else{updateMediaPicker()}
-  toast('Imagem enviada e disponível na Biblioteca.');
+  toast('Imagem adicionada à Biblioteca.');
  }catch(error){if(msg)msg.textContent=error.message;toast(error.message)}
 }
 async function submitMediaUpload(form){
@@ -504,19 +504,148 @@ function watchPage(eid){
  <div class="episode-list">${seq.map(epPublicRow).join('')}</div></div>`;
 }
 function missing(){return `<div class="container"><h1>Conteúdo não encontrado</h1><a class="btn" href="#/">Voltar ao início</a></div>`}
-const sideItems=[['dashboard','▦','Visão geral'],['series','▤','Séries'],['seasons','▥','Temporadas'],['episodes','▷','Episódios'],['media','▧','Biblioteca de mídia'],['schedule','◷','Calendário editorial'],['homepage','◈','CMS da página inicial'],['teams','♧','Equipes e permissões'],['settings','⚙','Configurações']];function side(){return `<aside class="sidebar" id="sidebar"><div class="row between"><div class="brand">CENA<em>LIVRE</em><div class="muted tiny" style="letter-spacing:0;font-weight:500">Studio de produção</div></div><button class="btn small mobile-side-close" data-action="toggle-side">✕</button></div><div class="sidebar-label">Operação editorial</div>${sideItems.map(([p,ic,t])=>`<button data-action="route" data-path="/studio/${p}" class="side-link ${route.parts[1]===p?'active':''}"><span style="font-size:17px;width:21px">${ic}</span>${t}</button>`).join('')}<div class="sidebar-label">Plataforma</div><button class="side-link" data-action="route" data-path="/">↗ &nbsp; Visitar portal</button><button class="side-link" data-action="${hosted?'logout':'reset'}">${hosted?'⇥ &nbsp; Sair do Studio':'↻ &nbsp; Restaurar dados de exemplo'}</button><div class="notice" style="margin:25px 7px 5px;font-size:11px">${hosted?'Painel conectado ao servidor. Os dados salvos são persistentes.':'Demonstração local, sem autenticação.'}</div></aside>`}
-function studioFrame(content){return `<div class="admin">${side()}<div class="admin-main"><div class="admin-top"><button class="btn small mobile-menu" data-action="toggle-side">☰</button><strong style="font-size:13px">Studio</strong><span class="app-version" title="Versão instalada do frontend">v${esc(frontendVersion)}</span><div style="flex:1"></div><span class="muted tiny">${hosted?'● Sessão autenticada':'● Ambiente demonstrativo'}</span><button class="btn small" data-action="route" data-path="/">Ver portal ↗</button></div><main class="admin-content">${content}</main></div></div>`}
-function pageHead(title,subtitle,actions=''){return `<div class="pagehead"><div><h1>${title}</h1><p>${subtitle}</p></div><div class="row">${actions}</div></div>`}
+const sideItems=[['dashboard','▦','Visão geral'],['series','▤','Séries'],['seasons','▥','Temporadas'],['episodes','▷','Episódios'],['media','▧','Biblioteca de mídia'],['schedule','◷','Calendário editorial'],['homepage','◈','CMS da página inicial'],['teams','♧','Equipes e permissões'],['settings','⚙','Configurações']];function side(){return `<aside class="sidebar" id="sidebar"><div class="row between"><div class="brand">CENA<em>LIVRE</em><div class="muted tiny" style="letter-spacing:0;font-weight:500">Studio</div></div><button class="btn small mobile-side-close" data-action="toggle-side">✕</button></div><div class="sidebar-label">Operação editorial</div>${sideItems.map(([p,ic,t])=>`<button data-action="route" data-path="/studio/${p}" class="side-link ${route.parts[1]===p?'active':''}"><span style="font-size:17px;width:21px">${ic}</span>${t}</button>`).join('')}<div class="sidebar-label">Plataforma</div><button class="side-link" data-action="route" data-path="/">↗ &nbsp; Visitar portal</button><button class="side-link" data-action="${hosted?'logout':'reset'}">${hosted?'⇥ &nbsp; Sair do Studio':'↻ &nbsp; Restaurar dados'}</button></aside>`}
+function studioFrame(content){return `<div class="admin">${side()}<div class="admin-main"><div class="admin-top"><button class="btn small mobile-menu" data-action="toggle-side">☰</button><strong style="font-size:13px">Studio</strong><div style="flex:1"></div><button class="btn small" data-action="route" data-path="/">Ver portal ↗</button></div><main class="admin-content">${content}</main></div></div>`}
+function pageHead(title,subtitle,actions=''){return `<div class="pagehead"><div><h1>${title}</h1>${subtitle?'<p>'+subtitle+'</p>':''}</div><div class="row">${actions}</div></div>`}
 function stat(n,label){return `<div class="panel"><div class="stat-label">${label}</div><div class="stat-value">${n}</div></div>`}
 function dashboard(){const coming=db.episodes.filter(x=>state(x)==='Em breve').sort((a,b)=>new Date(a.releaseAt)-new Date(b.releaseAt));return pageHead('Visão geral','Acompanhe o catálogo e os próximos lançamentos.',`<button class="btn primary" data-action="create-series">+ Nova série</button>`)+`<div class="stat-grid">${stat(db.series.length,'Séries cadastradas')}${stat(db.episodes.length,'Episódios')}${stat(coming.length,'Estreias programadas')}${stat(db.teams.length,'Equipes')}</div><div class="two-column"><section class="panel"><h2>Próximas estreias</h2>${coming.length?coming.slice(0,6).map(x=>`<div class="schedule-line"><div class="smallcaps" style="color:#b25d4d">${dt(x.releaseAt)}</div><strong>${esc(seriesForEpisode(x)?.title)} · ${esc(x.title)}</strong><div class="muted tiny">T${by('seasons',x.seasonId)?.number}:E${x.number}</div></div>`).join(''):'<p class="muted">Nenhuma estreia agendada.</p>'}<button class="btn small" data-action="route" data-path="/studio/schedule">Abrir calendário</button></section><section class="panel"><h2>Produções em destaque</h2>${db.series.slice(0,4).map(s=>`<div class="item-card"><img src="${esc(s.banner)}" alt=""><div class="item-info"><h3>${esc(s.title)}</h3><p>${esc(s.category)} · ${epOrder(s.id).length} episódio(s)</p></div><button class="btn small" data-action="edit-series" data-id="${s.id}">Editar</button></div>`).join('')}</section></div>`}
-function seriesAdmin(){return pageHead('Séries','Cadastre e administre as produções das equipes.',`<button class="btn primary" data-action="create-series">+ Nova série</button>`)+`<div class="panel"><table class="data-table"><thead><tr><th>Produção</th><th>Categoria</th><th>Equipe(s)</th><th>Episódios</th><th></th></tr></thead><tbody>${db.series.map(s=>`<tr><td><div class="row"><img src="${esc(s.poster)}" style="width:40px;height:55px;object-fit:cover;border-radius:5px" alt=""><strong>${esc(s.title)}</strong></div></td><td>${esc(s.category)}</td><td>${s.teamIds.map(t=>esc(by('teams',t)?.name)).join(', ')}</td><td>${epOrder(s.id).length}</td><td><button class="btn small" data-action="edit-series" data-id="${s.id}">Editar</button> <button class="btn small" data-action="route" data-path="/serie/${s.id}">Visualizar ↗</button></td></tr>`).join('')}</tbody></table></div>`}
-function seasonsAdmin(){return pageHead('Temporadas','Organização narrativa por série.',`<button class="btn primary" data-action="create-season">+ Nova temporada</button>`)+`<div class="panel"><table class="data-table"><thead><tr><th>Série</th><th>Temporada</th><th>Nome</th><th>Episódios</th><th></th></tr></thead><tbody>${db.seasons.map(s=>`<tr><td>${esc(by('series',s.seriesId)?.title)}</td><td>${s.number}</td><td>${esc(s.title)}</td><td>${eps(s.id).length}</td><td><button class="btn small" data-action="edit-season" data-id="${s.id}">Editar</button></td></tr>`).join('')}</tbody></table></div>`}
-function episodesAdmin(){return pageHead('Episódios','Controle de vídeos, thumbnails e datas de exibição.',`<button class="btn primary" data-action="create-episode">+ Novo episódio</button>`)+`<div class="panel"><table class="data-table"><thead><tr><th>Nome</th><th>Série</th><th>Disponibilidade</th><th>Estreia</th><th></th></tr></thead><tbody>${db.episodes.map(e=>`<tr><td><strong>T${by('seasons',e.seasonId)?.number}:E${e.number} · ${esc(e.title)}</strong></td><td>${esc(seriesForEpisode(e)?.title)}</td><td><span class="badge ${playable(e)?'green':state(e)==='Em breve'?'orange':'blue'}">${state(e)}</span></td><td>${dt(e.releaseAt)}</td><td><button class="btn small" data-action="edit-episode" data-id="${e.id}">Editar</button></td></tr>`).join('')}</tbody></table></div>`}
+
+const catalogFilters={
+ series:{query:'',category:'all',visibility:'all'},
+ seasons:{query:'',seriesId:'all'},
+ episodes:{query:'',seriesId:'all',status:'all'}
+};
+function catalogMatches(value,query){
+ return String(value||'').toLocaleLowerCase('pt-BR').includes(query.trim().toLocaleLowerCase('pt-BR'));
+}
+function catalogItems(type){
+ const filter=catalogFilters[type];
+ if(type==='series'){
+  return [...db.series].filter(s=>
+   (filter.category==='all'||s.category===filter.category)&&
+   (filter.visibility==='all'||(s.visibility||'draft')===filter.visibility)&&
+   catalogMatches([s.title,s.category,s.summary,s.teamIds.map(id=>by('teams',id)?.name).join(' ')].join(' '),filter.query)
+  ).sort((a,b)=>a.title.localeCompare(b.title,'pt-BR'));
+ }
+ if(type==='seasons'){
+  return [...db.seasons].filter(s=>(filter.seriesId==='all'||s.seriesId===filter.seriesId)&&
+   catalogMatches([s.title,s.number,by('series',s.seriesId)?.title].join(' '),filter.query)
+  ).sort((a,b)=>String(by('series',a.seriesId)?.title||'').localeCompare(String(by('series',b.seriesId)?.title||''),'pt-BR')||a.number-b.number);
+ }
+ return [...db.episodes].filter(e=>{
+  const parent=by('seasons',e.seasonId),production=parent&&by('series',parent.seriesId);
+  return (filter.seriesId==='all'||parent?.seriesId===filter.seriesId)&&
+   (filter.status==='all'||e.status===filter.status)&&
+   catalogMatches([e.title,e.number,e.summary,production?.title,parent?.title].join(' '),filter.query);
+ }).sort((a,b)=>{
+  const aSeason=by('seasons',a.seasonId),bSeason=by('seasons',b.seasonId);
+  return String(by('series',aSeason?.seriesId)?.title||'').localeCompare(String(by('series',bSeason?.seriesId)?.title||''),'pt-BR')||
+   Number(aSeason?.number||0)-Number(bSeason?.number||0)||a.number-b.number;
+ });
+}
+const catalogSelect=(label,key,options,chosen)=>
+ '<label class="catalog-filter"><span>'+esc(label)+'</span><select class="select" data-catalog-filter="'+key+'">'+
+ options.map(o=>'<option value="'+esc(o.id)+'" '+(o.id===chosen?'selected':'')+'>'+esc(o.name||o.title)+'</option>').join('')+
+ '</select></label>';
+function catalogToolbar(type){
+ const filter=catalogFilters[type];
+ const categories=[...new Set(db.series.map(s=>s.category))].sort((a,b)=>a.localeCompare(b,'pt-BR'));
+ const categoryOptions=[{id:'all',name:'Todas as categorias'},...categories.map(v=>({id:v,name:v}))];
+ const seriesOptions=[{id:'all',name:'Todas as séries'},...db.series.map(s=>({id:s.id,name:s.title})).sort((a,b)=>a.name.localeCompare(b.name,'pt-BR'))];
+ const statusOptions=[{id:'all',name:'Todos os estados'},...[
+  ['draft','Rascunho'],['scheduled','Agendado'],['published','Publicado'],['suspended','Suspenso']
+ ].map(([id,name])=>({id,name}))];
+ const visibilityOptions=[{id:'all',name:'Todas as visibilidades'},{id:'draft',name:'Rascunho'},
+  {id:'public',name:'Pública'},{id:'suspended',name:'Suspensa'}];
+ return '<div class="catalog-toolbar" data-catalog-type="'+type+'">'+
+  '<label class="catalog-search"><span>Pesquisar</span><input class="input" type="search" data-catalog-search="'+type+'" placeholder="'+
+   (type==='series'?'Buscar por título, categoria ou equipe':type==='seasons'?'Buscar temporada ou série':'Buscar episódio, série ou temporada')+
+   '" value="'+esc(filter.query)+'" autocomplete="off"></label>'+
+  (type==='series'?catalogSelect('Categoria','category',categoryOptions,filter.category)+catalogSelect('Visibilidade','visibility',visibilityOptions,filter.visibility):
+   type==='seasons'?catalogSelect('Série','seriesId',seriesOptions,filter.seriesId):
+    catalogSelect('Série','seriesId',seriesOptions,filter.seriesId)+catalogSelect('Estado','status',statusOptions,filter.status))+
+  '<button class="btn small catalog-clear" data-action="catalog-clear" data-type="'+type+'" type="button">Limpar filtros</button></div>';
+}
+function catalogEmpty(type){
+ const filter=catalogFilters[type],filtered=filter.query||Object.entries(filter).some(([key,value])=>key!=='query'&&value!=='all');
+ const messages={series:'Nenhuma série cadastrada.',seasons:'Nenhuma temporada cadastrada.',episodes:'Nenhum episódio cadastrado.'};
+ const create={series:'create-series',seasons:'create-season',episodes:'create-episode'};
+ return '<tr><td colspan="'+(type==='episodes'?5:5)+'"><div class="catalog-empty"><strong>'+
+ (filtered?'Nenhum resultado encontrado.':messages[type])+'</strong>'+
+ '<p>'+(filtered?'Altere os filtros ou faça uma nova busca.':'Comece criando um novo conteúdo.')+'</p>'+
+ (filtered?'<button type="button" class="btn small" data-action="catalog-clear" data-type="'+type+'">Limpar filtros</button>':
+ '<button type="button" class="btn small primary" data-action="'+create[type]+'">Criar agora</button>')+
+ '</div></td></tr>';
+}
+function catalogRows(type){
+ const items=catalogItems(type);
+ if(!items.length)return catalogEmpty(type);
+ if(type==='series')return items.map(s=>{
+  const count=db.seasons.filter(t=>t.seriesId===s.id).length;
+  const epCount=db.episodes.filter(e=>by('seasons',e.seasonId)?.seriesId===s.id).length;
+  const visibility=s.visibility||'draft';
+  const badge=visibility==='public'?'Pública':visibility==='suspended'?'Suspensa':'Rascunho';
+  return '<tr><td><div class="catalog-title"><img src="'+esc(s.poster||'')+'" alt="" loading="lazy">'+
+   '<div><strong>'+esc(s.title)+'</strong><div class="muted tiny">'+esc(s.category)+'</div></div></div></td>'+
+   '<td><span class="badge '+(visibility==='public'?'green':visibility==='suspended'?'orange':'blue')+'">'+badge+'</span></td>'+
+   '<td class="catalog-wrap">'+esc((s.teamIds||[]).map(id=>by('teams',id)?.name).filter(Boolean).join(', ')||'Sem equipe')+'</td>'+
+   '<td><button class="btn small catalog-count" data-action="catalog-to-seasons" data-id="'+esc(s.id)+'">'+count+' temp. · '+epCount+' ep.</button></td>'+
+   '<td class="catalog-row-actions"><button class="btn small" data-action="edit-series" data-id="'+esc(s.id)+'">Editar</button>'+
+   '<button class="btn small catalog-delete" data-action="delete-series" data-id="'+esc(s.id)+'">Excluir</button></td></tr>';
+ }).join('');
+ if(type==='seasons')return items.map(season=>{
+  const production=by('series',season.seriesId),number=db.episodes.filter(e=>e.seasonId===season.id).length;
+  return '<tr><td><strong>'+esc(production?.title||'Série indisponível')+'</strong></td>'+
+   '<td><span class="catalog-number">'+season.number+'</span></td>'+
+   '<td>'+esc(season.title)+'</td>'+
+   '<td><button class="btn small catalog-count" data-action="catalog-to-episodes" data-id="'+esc(season.seriesId)+'">'+number+' episódios</button></td>'+
+   '<td class="catalog-row-actions"><button class="btn small" data-action="edit-season" data-id="'+esc(season.id)+'">Editar</button>'+
+   '<button class="btn small catalog-delete" data-action="delete-season" data-id="'+esc(season.id)+'">Excluir</button></td></tr>';
+ }).join('');
+ return items.map(e=>{
+  const season=by('seasons',e.seasonId),production=seriesForEpisode(e);
+  const stateLabel=e.status==='published'?'Publicado':e.status==='scheduled'?'Agendado':e.status==='suspended'?'Suspenso':'Rascunho';
+  return '<tr><td><div class="catalog-title"><img src="'+esc(e.thumbnail||'')+'" alt="" loading="lazy">'+
+   '<div><strong>'+esc(e.title)+'</strong><div class="muted tiny">T'+(season?.number||'?')+':E'+e.number+'</div></div></div></td>'+
+   '<td class="catalog-wrap">'+esc(production?.title||'Série indisponível')+'</td>'+
+   '<td><span class="badge '+(e.status==='published'?'green':e.status==='scheduled'?'orange':'blue')+'">'+stateLabel+'</span></td>'+
+   '<td>'+esc(e.releaseAt?dt(e.releaseAt):'Sem data')+'</td>'+
+   '<td class="catalog-row-actions"><button class="btn small" data-action="edit-episode" data-id="'+esc(e.id)+'">Editar</button>'+
+   '<button class="btn small catalog-delete" data-action="delete-episode" data-id="'+esc(e.id)+'">Excluir</button></td></tr>';
+ }).join('');
+}
+function refreshCatalogTable(type){
+ const table=document.querySelector('[data-catalog-table="'+type+'"]');
+ if(!table)return;
+ const tbody=table.querySelector('tbody');
+ if(tbody)tbody.innerHTML=catalogRows(type);
+ const count=document.querySelector('[data-catalog-count="'+type+'"]');
+ if(count)count.textContent=catalogItems(type).length+' de '+
+  (type==='series'?db.series:type==='seasons'?db.seasons:db.episodes).length+' itens';
+}
+function catalogPage(type){
+ const titles={series:'Séries',seasons:'Temporadas',episodes:'Episódios'};
+ const createLabels={series:'Nova série',seasons:'Nova temporada',episodes:'Novo episódio'};
+ const createActions={series:'create-series',seasons:'create-season',episodes:'create-episode'};
+ const columns={series:['Série','Visibilidade','Equipes','Conteúdo','Ações'],
+  seasons:['Série','Nº','Temporada','Episódios','Ações'],
+  episodes:['Episódio','Série','Estado','Estreia','Ações']};
+ return pageHead(titles[type],'', '<button class="btn primary" data-action="'+createActions[type]+'">+ '+createLabels[type]+'</button>')+
+ '<section class="panel catalog-manager">'+catalogToolbar(type)+
+ '<div class="row between catalog-results"><span data-catalog-count="'+type+'">'+catalogItems(type).length+' de '+
+ (type==='series'?db.series:type==='seasons'?db.seasons:db.episodes).length+' itens</span></div>'+
+ '<div class="catalog-table-scroll"><table class="data-table catalog-table" data-catalog-table="'+type+'"><thead><tr>'+
+ columns[type].map(c=>'<th>'+c+'</th>').join('')+
+ '</tr></thead><tbody>'+catalogRows(type)+'</tbody></table></div></section>';
+}
+function seriesAdmin(){return catalogPage('series')}
+function seasonsAdmin(){return catalogPage('seasons')}
+function episodesAdmin(){return catalogPage('episodes')}
 function mediaAdmin(){
  const allTags=[...new Set(mediaData.assets.flatMap(a=>a.tags))].sort();
- return pageHead('Biblioteca de mídia','Upload, organização, tags e seleção para séries, episódios e banners.',
+ return pageHead('Biblioteca de mídia','Organize, encontre e reutilize suas imagens.',
  '<button class="btn primary" data-action="media-upload-open">+ Enviar imagem</button>')+
- '<div class="panel"><div class="row between"><div><h2>Arquivos armazenados</h2><p class="muted tiny">Imagens armazenadas no homelab e organizadas por categorias e tags.</p></div>'+
+ '<div class="panel"><div class="row between"><div><h2>Arquivos armazenados</h2><p class="muted tiny">Busque imagens por nome, categoria ou tag.</p></div>'+
  '<span class="badge" id="media-library-count">'+mediaData.assets.length+' arquivo(s)</span></div>'+
  '<div class="media-toolbar"><input class="input" id="media-search" placeholder="Buscar nome, arquivo ou tag" value="'+esc(mediaSearch)+'">'+
  '<select class="select" id="media-kind-filter"><option value="all">Todas as categorias</option>'+mediaCategories.map(c=>
@@ -525,14 +654,14 @@ function mediaAdmin(){
  '<option value="'+esc(t)+'" '+(mediaTagFilter===t?'selected':'')+'>'+esc(t)+'</option>').join('')+'</select></div>'+
  '<div class="media-grid" id="media-library-grid">'+(mediaData.assets.length?mediaData.assets.map(a=>mediaCard(a)).join(''):
  '<div class="empty">Nenhuma mídia enviada. Clique em “Enviar imagem” para começar.</div>')+'</div></div>'+
- '<div class="notice">Formatos permitidos: '+esc(mediaData.settings.allowedTypes.join(', ').toUpperCase())+
+ '<div class="catalog-storage-hint">Formatos permitidos: '+esc(mediaData.settings.allowedTypes.join(', ').toUpperCase())+
  '. Tamanho máximo: '+mediaData.settings.maxFileMb+' MB por arquivo. Até '+mediaData.settings.maxFiles+
- ' imagens armazenadas. Alterações desses limites em Configurações → Uploads.</div>';
+ ' imagens. Ajuste os limites em Configurações → Uploads.</div>';
 }
 function scheduleAdmin(){const es=[...db.episodes].filter(e=>e.releaseAt).sort((a,b)=>new Date(a.releaseAt)-new Date(b.releaseAt));return pageHead('Calendário editorial','Controle as janelas de publicação de cada episódio.')+`<div class="panel"><h2>Linha do tempo de lançamentos</h2>${es.map(e=>`<div class="schedule-line"><div class="smallcaps">${dt(e.releaseAt)}</div><div class="row between"><div><strong>${esc(seriesForEpisode(e)?.title)} — ${esc(e.title)}</strong><div class="tiny muted">${state(e)}${e.endAt?' · expira '+dt(e.endAt):' · sem expiração'}</div></div><button class="btn small" data-action="edit-episode" data-id="${e.id}">Editar datas</button></div></div>`).join('')}</div>`}
 function homepageAdmin(){return pageHead('CMS da página inicial','Gerencie a vitrine, campanhas e ordem das seções.',`<button class="btn primary" data-action="create-banner">+ Novo banner</button>`)+`<div class="panel"><h2>Banners e campanhas</h2><div class="stack">${db.banners.map(b=>`<div class="item-card"><img class="banner-thumb" src="${esc(b.image)}" alt=""><div class="item-info"><h3>${esc(b.title)}</h3><p>${bannerActive(b)?'No ar':b.active?'Programado ou encerrado':'Inativo'} · ${b.startAt?dt(b.startAt):'Início imediato'} · ${b.endAt?dt(b.endAt):'Sem término'}</p></div><button class="btn small" data-action="edit-banner" data-id="${b.id}">Editar</button></div>`).join('')}</div></div><div class="panel"><h2>Seções do portal</h2><p class="muted tiny">Altere a ordem e visibilidade dos blocos da página inicial.</p><div class="stack">${db.homeSections.map((s,i)=>`<div class="item-card"><div class="item-info"><h3>${esc(s.title)}</h3><p>${esc(s.kind)}</p></div><label class="tiny"><input type="checkbox" data-action="toggle-section" data-id="${s.id}" ${s.active?'checked':''}> Visível</label><button class="btn small" data-action="move-section" data-id="${s.id}" data-dir="-1" ${i===0?'disabled':''}>↑</button><button class="btn small" data-action="move-section" data-id="${s.id}" data-dir="1" ${i===db.homeSections.length-1?'disabled':''}>↓</button></div>`).join('')}</div></div>`}
-function teamsAdmin(){return pageHead('Equipes e permissões','Colaboradores, papéis e responsabilidade pelas produções.',`<button class="btn" data-action="create-team">+ Equipe</button><button class="btn primary" data-action="create-member">+ Integrante</button>`)+`<div class="two-column"><div class="panel"><h2>Equipes</h2><div class="stack">${db.teams.map(t=>`<div class="item-card"><div class="item-info"><h3>${esc(t.name)}</h3><p>${db.members.filter(m=>m.teamId===t.id).length} integrante(s) · ${db.series.filter(s=>s.teamIds.includes(t.id)).length} produção(ões)</p></div><button class="btn small" data-action="edit-team" data-id="${t.id}">Editar</button></div>`).join('')}</div></div><div class="panel"><h2>Integrantes</h2><table class="data-table"><thead><tr><th>Nome</th><th>Equipe</th><th>Papel</th><th></th></tr></thead><tbody>${db.members.map(m=>`<tr><td>${esc(m.name)}<div class="tiny muted">${esc(m.email)}</div></td><td>${esc(by('teams',m.teamId)?.name)}</td><td><span class="badge">${esc(m.role)}</span></td><td><button class="btn small" data-action="edit-member" data-id="${m.id}">Editar</button></td></tr>`).join('')}</tbody></table></div></div><div class="notice">Equipes e membros são administrados no servidor. A autorização é conferida pela API em cada requisição; apenas administradores podem criar contas ou equipes nesta versão.</div>`}
-function settingsAdmin(){return pageHead('Configurações','Identidade, marca, reprodução, mídias e segurança — tudo organizado por categoria.')+`<nav class="settings-nav" aria-label="Categorias das configurações"><button class="btn small" data-action="settings-jump" data-target="settings-identidade" type="button">Identidade</button><button class="btn small" data-action="settings-jump" data-target="settings-marca" type="button">Marca</button><button class="btn small" data-action="settings-jump" data-target="settings-reproducao" type="button">Reprodução</button><button class="btn small" data-action="settings-jump" data-target="settings-uploads" type="button">Uploads</button><button class="btn small" data-action="settings-jump" data-target="settings-seguranca" type="button">Segurança</button></nav><section class="panel form-surface-light settings-panel" id="settings-identidade"><div class="settings-section-head"><div><h2>Identidade e portal</h2><p>Dados públicos, imagens da marca e comportamento da reprodução.</p></div></div><form id="settings-form" class="stack"><fieldset class="settings-category"><legend>Identidade da plataforma</legend><div class="field"><label>Nome da plataforma</label><input class="input" name="siteName" value="${esc(db.preferences.siteName)}" required></div><div class="field"><label>Descrição pública</label><textarea class="textarea" name="siteDescription">${esc(db.preferences.siteDescription)}</textarea></div><div class="field"><label>E-mail de contato institucional</label><input class="input" name="contactEmail" type="email" value="${esc(db.preferences.contactEmail||'')}" placeholder="contato@exemplo.com"></div></fieldset><fieldset class="settings-category" id="settings-marca"><legend>Marca · logotipo e ícone</legend>${mediaField('Logotipo','logoUrl',db.preferences.logoUrl||'','logo')}${mediaField('Ícone / favicon','iconUrl',db.preferences.iconUrl||'','icon')}</fieldset><fieldset class="settings-category" id="settings-reproducao"><legend>Reprodução</legend><label class="row tiny"><input type="checkbox" name="autoplay" ${db.preferences.autoplay?'checked':''}> Sugerir reprodução automática do próximo episódio</label></fieldset><div><button class="btn primary" type="submit" ${hosted&&!studioUser?.isAdmin?'disabled':''}>Salvar configurações</button></div></form></section><section class="panel form-surface-light settings-panel" id="settings-uploads"><div class="settings-section-head"><div><h2>Biblioteca de Mídia e uploads</h2><p>Controle limites de armazenamento, formatos aceitos e políticas de envio.</p></div></div><form id="upload-settings-form" class="stack"><div class="form-grid"><div class="field"><label>Tamanho máximo por arquivo (1 a 20 MB)</label><input class="input" type="number" name="maxFileMb" min="1" max="20" value="${mediaData.settings.maxFileMb}" required></div><div class="field"><label>Quantidade máxima de imagens (1 a 2000)</label><input class="input" type="number" name="maxFiles" min="1" max="2000" value="${mediaData.settings.maxFiles}" required></div></div><div class="field"><label>Formatos permitidos</label><div class="pillset">${['png','jpeg','webp','gif'].map(t=>`<label class="pill"><input type="checkbox" name="allowedTypes" value="${t}" ${mediaData.settings.allowedTypes.includes(t)?'checked':''}> ${t.toUpperCase()}</label>`).join('')}</div></div><p class="muted tiny">Os arquivos são armazenados em um volume persistente do Docker. SVG enviado pelo usuário é bloqueado por segurança. Alterações não apagam arquivos existentes.</p><div><button class="btn primary" type="submit" ${!studioUser?.isAdmin?'disabled':''}>Salvar limites de upload</button></div></form></section><section class="panel settings-panel" id="settings-seguranca"><h2>Ambiente e segurança</h2><p class="muted">Configurações administrativas armazenadas no banco de dados. Alterações exigem autorização do administrador e são auditadas. A gestão de conteúdo ocorre nos módulos de Séries, Temporadas e Episódios. Os arquivos são mantidos no volume persistente cenalivre_media e os metadados no MariaDB.</p></section>`}
+function teamsAdmin(){return pageHead('Equipes e permissões','Colaboradores, papéis e responsabilidade pelas produções.',`<button class="btn" data-action="create-team">+ Equipe</button><button class="btn primary" data-action="create-member">+ Integrante</button>`)+`<div class="two-column"><div class="panel"><h2>Equipes</h2><div class="stack">${db.teams.map(t=>`<div class="item-card"><div class="item-info"><h3>${esc(t.name)}</h3><p>${db.members.filter(m=>m.teamId===t.id).length} integrante(s) · ${db.series.filter(s=>s.teamIds.includes(t.id)).length} produção(ões)</p></div><button class="btn small" data-action="edit-team" data-id="${t.id}">Editar</button></div>`).join('')}</div></div><div class="panel"><h2>Integrantes</h2><table class="data-table"><thead><tr><th>Nome</th><th>Equipe</th><th>Papel</th><th></th></tr></thead><tbody>${db.members.map(m=>`<tr><td>${esc(m.name)}<div class="tiny muted">${esc(m.email)}</div></td><td>${esc(by('teams',m.teamId)?.name)}</td><td><span class="badge">${esc(m.role)}</span></td><td><button class="btn small" data-action="edit-member" data-id="${m.id}">Editar</button></td></tr>`).join('')}</tbody></table></div></div><div class="notice">Gerencie integrantes e seus papéis na equipe.</div>`}
+function settingsAdmin(){return pageHead('Configurações','')+`<nav class="settings-nav" aria-label="Categorias das configurações"><button class="btn small" data-action="settings-jump" data-target="settings-identidade" type="button">Identidade</button><button class="btn small" data-action="settings-jump" data-target="settings-marca" type="button">Marca</button><button class="btn small" data-action="settings-jump" data-target="settings-reproducao" type="button">Reprodução</button><button class="btn small" data-action="settings-jump" data-target="settings-uploads" type="button">Uploads</button><button class="btn small" data-action="settings-jump" data-target="settings-seguranca" type="button">Segurança</button></nav><section class="panel form-surface-light settings-panel" id="settings-identidade"><div class="settings-section-head"><div><h2>Identidade e portal</h2><p>Dados públicos, imagens da marca e comportamento da reprodução.</p></div></div><form id="settings-form" class="stack"><fieldset class="settings-category"><legend>Identidade da plataforma</legend><div class="field"><label>Nome da plataforma</label><input class="input" name="siteName" value="${esc(db.preferences.siteName)}" required></div><div class="field"><label>Descrição pública</label><textarea class="textarea" name="siteDescription">${esc(db.preferences.siteDescription)}</textarea></div><div class="field"><label>E-mail de contato institucional</label><input class="input" name="contactEmail" type="email" value="${esc(db.preferences.contactEmail||'')}" placeholder="contato@exemplo.com"></div></fieldset><fieldset class="settings-category" id="settings-marca"><legend>Marca · logotipo e ícone</legend>${mediaField('Logotipo','logoUrl',db.preferences.logoUrl||'','logo')}${mediaField('Ícone / favicon','iconUrl',db.preferences.iconUrl||'','icon')}</fieldset><fieldset class="settings-category" id="settings-reproducao"><legend>Reprodução</legend><label class="row tiny"><input type="checkbox" name="autoplay" ${db.preferences.autoplay?'checked':''}> Sugerir reprodução automática do próximo episódio</label></fieldset><div><button class="btn primary" type="submit" ${hosted&&!studioUser?.isAdmin?'disabled':''}>Salvar configurações</button></div></form></section><section class="panel form-surface-light settings-panel" id="settings-uploads"><div class="settings-section-head"><div><h2>Biblioteca de Mídia e uploads</h2><p>Defina os formatos e limites dos arquivos enviados.</p></div></div><form id="upload-settings-form" class="stack"><div class="form-grid"><div class="field"><label>Tamanho máximo por arquivo (1 a 20 MB)</label><input class="input" type="number" name="maxFileMb" min="1" max="20" value="${mediaData.settings.maxFileMb}" required></div><div class="field"><label>Quantidade máxima de imagens (1 a 2000)</label><input class="input" type="number" name="maxFiles" min="1" max="2000" value="${mediaData.settings.maxFiles}" required></div></div><div class="field"><label>Formatos permitidos</label><div class="pillset">${['png','jpeg','webp','gif'].map(t=>`<label class="pill"><input type="checkbox" name="allowedTypes" value="${t}" ${mediaData.settings.allowedTypes.includes(t)?'checked':''}> ${t.toUpperCase()}</label>`).join('')}</div></div><p class="muted tiny">Escolha os formatos e limites permitidos para novos envios. Os arquivos existentes serão mantidos.</p><div><button class="btn primary" type="submit" ${!studioUser?.isAdmin?'disabled':''}>Salvar limites de upload</button></div></form></section><section class="panel settings-panel" id="settings-seguranca"><h2>Ambiente e segurança</h2><p class="muted">O acesso às funções administrativas segue as permissões de cada usuário.</p></section>`}
 function studioPage(){const page=route.parts[1]||'dashboard';return studioFrame(({dashboard,series:seriesAdmin,seasons:seasonsAdmin,episodes:episodesAdmin,media:mediaAdmin,schedule:scheduleAdmin,homepage:homepageAdmin,teams:teamsAdmin,settings:settingsAdmin}[page]||dashboard)())}
 function render(){parse();
 db=route.studio?(hosted?(studioData||publicData):localDemo):publicData;
@@ -547,16 +676,16 @@ if(hosted&&!route.studio&&publicLoadState!=='ready'){
  const failure=publicLoadState==='error';
  root.innerHTML=publicNav()+'<main class="container public-loading">'+
   '<h1>'+(failure?'Não foi possível carregar o catálogo':'Carregando catálogo...')+'</h1>'+
-  '<p class="muted">'+(failure?'Os dados do servidor estão indisponíveis. Não serão exibidos exemplos como se fossem conteúdos publicados.':'Consultando as produções cadastradas no CenaLivre.')+'</p>'+
+  '<p class="muted">'+(failure?'Não foi possível carregar as séries. Tente novamente.':'Aguarde um instante.')+'</p>'+
   (failure?'<button class="btn primary" data-action="retry-public">Tentar novamente</button>':'<div class="loading-track"></div>')+
-  '<p class="muted tiny">Frontend v'+esc(frontendVersion)+'</p></main>';
+  '</main>';
  return;
 }
 if(route.studio){
   if(hosted&&!studioUser){root.innerHTML=studioLogin();return}
   if(hosted&&!studioData){root.innerHTML=publicNav()+'<main class="container"><p>Carregando Studio...</p></main>';return}
   root.innerHTML=studioPage();return
-}let content=route.path==='/'?home():route.parts[0]==='explorar'?explore():route.parts[0]==='serie'?seriesPage(route.parts[1]):route.parts[0]==='assistir'?watchPage(route.parts[1]):route.parts[0]==='entrar'?'<main class="container"><button class="btn primary" data-action="go-studio">Entrar no Studio</button></main>':missing();root.innerHTML=publicNav()+content+`<footer class="footer">CenaLivre · Séries independentes · <span class="app-version">Frontend v${esc(frontendVersion)}</span></footer>`;
+}let content=route.path==='/'?home():route.parts[0]==='explorar'?explore():route.parts[0]==='serie'?seriesPage(route.parts[1]):route.parts[0]==='assistir'?watchPage(route.parts[1]):route.parts[0]==='entrar'?'<main class="container"><button class="btn primary" data-action="go-studio">Entrar no Studio</button></main>':missing();root.innerHTML=publicNav()+content+`<footer class="footer">CenaLivre · Séries independentes</footer>`;
 if(route.parts[0]==='assistir'&&activeVideo===route.parts[1]){
  const episode=by('episodes',route.parts[1]);
  const video=episode&&playable(episode)?ytId(episode.youtube):null;
@@ -565,7 +694,7 @@ if(route.parts[0]==='assistir'&&activeVideo===route.parts[1]){
 }
 function modal(title,body){document.getElementById('modal-root').innerHTML=`<div class="modal-backdrop" data-action="close-modal"><div class="modal form-surface-light" role="dialog" aria-modal="true" aria-label="${esc(title)}"><div class="row between"><h2>${esc(title)}</h2><button class="btn small" data-action="close-modal">✕</button></div>${body}</div></div>`}
 const field=(label,name,value='',type='text',extra='')=>`<div class="field"><label>${label}</label><input class="input" name="${name}" type="${type}" value="${esc(value)}" ${extra}></div>`;const area=(label,name,value='')=>`<div class="field span2"><label>${label}</label><textarea class="textarea" name="${name}">${esc(value)}</textarea></div>`;const select=(label,name,opts,selected)=>`<div class="field"><label>${label}</label><select class="select" name="${name}">${opts.map(x=>`<option value="${esc(x.id)}" ${x.id===selected?'selected':''}>${esc(x.title||x.name)}</option>`).join('')}</select></div>`;const submit=`<div class="span2 row between" style="margin-top:12px"><button type="button" class="btn" data-action="close-modal">Cancelar</button><button type="submit" class="btn primary">Salvar alterações</button></div>`;
-function openEditor(type,entityId){const editing=!!entityId,x=editing?by(type,entityId):null;let body='';if(type==='series'){body=`<form class="form-grid" data-form="series" data-id="${entityId||''}">${field('Título','title',x?.title,'text','required')}${field('Categoria','category',x?.category||'Documentário','text','required')}${area('Sinopse','summary',x?.summary)}${mediaField('Pôster vertical','poster',x?.poster||img('new-poster',650,900),'poster')}${mediaField('Banner horizontal','banner',x?.banner||img('new-banner',1300,700),'banner')}<div class="field span2"><label>Equipes responsáveis (selecione uma ou mais)</label><div class="pillset">${db.teams.map(t=>`<label class="pill"><input type="checkbox" name="teamIds" value="${t.id}" ${(x?.teamIds||[]).includes(t.id)?'checked':''}> ${esc(t.name)}</label>`).join('')}</div></div><label class="span2"><input type="checkbox" name="featured" ${x?.featured?'checked':''}> Destaque no portal</label>${submit}</form>`}else if(type==='seasons'){body=`<form class="form-grid" data-form="seasons" data-id="${entityId||''}">${select('Série','seriesId',db.series,x?.seriesId)}${field('Número','number',x?.number||seasons(db.series[0]?.id).length+1,'number','min="1" required')}${field('Título da temporada','title',x?.title||'Nova temporada','text','required')}${submit}</form>`}else if(type==='episodes'){body=`<form class="form-grid" data-form="episodes" data-id="${entityId||''}">${select('Temporada','seasonId',db.seasons.map(s=>({...s,title:`${by('series',s.seriesId)?.title} — T${s.number}`})),x?.seasonId)}${field('Número do episódio','number',x?.number||1,'number','min="1" required')}${field('Título','title',x?.title,'text','required')}${field('Duração estimada (min)','duration',x?.duration||20,'number','min="1"')}${area('Sinopse','summary',x?.summary)}${field('URL ou ID do vídeo YouTube','youtube',x?.youtube)}${mediaField('Thumbnail do episódio','thumbnail',x?.thumbnail||img('new-episode',1200,700),'thumbnail')}${field('Disponível a partir de','releaseAt',(x?datetimeLocal(x.releaseAt):future(1)),'datetime-local','required')}${field('Disponível até (opcional)','endAt',(x?datetimeLocal(x.endAt):''),'datetime-local')}${select('Estado editorial','status',[{id:'published',title:'Aprovado / publicado'},{id:'scheduled',title:'Agendado'},{id:'draft',title:'Rascunho'},{id:'suspended',title:'Suspenso'}],x?.status||'scheduled')}${submit}</form>`}else if(type==='banners'){body=`<form class="form-grid" data-form="banners" data-id="${entityId||''}">${field('Título','title',x?.title,'text','required')}${field('Prioridade (menor primeiro)','order',x?.order||1,'number','min="1"')}${area('Texto de apoio','subtitle',x?.subtitle)}${mediaField('Banner desktop','image',x?.image||img('new-campaign',1400,800),'banner')}${mediaField('Banner mobile (opcional)','mobileImage',x?.mobileImage,'banner')}${select('Destino: série','target',db.series,x?.target)}${field('Início da campanha','startAt',(x?datetimeLocal(x.startAt):future(1)),'datetime-local')}${field('Fim da campanha','endAt',(x?datetimeLocal(x.endAt):''),'datetime-local')}<label class="span2"><input type="checkbox" name="active" ${x?.active!==false?'checked':''}> Campanha habilitada</label>${submit}</form>`}else if(type==='teams'){body=`<form class="form-grid" data-form="teams" data-id="${entityId||''}">${field('Nome da equipe','name',x?.name,'text','required')}${field('Descrição','description',x?.description)}${submit}</form>`}else if(type==='members'){body=`<form class="form-grid" data-form="members" data-id="${entityId||''}">${field('Nome','name',x?.name,'text','required')}${field('E-mail','email',x?.email,'email','required')}${select('Equipe','teamId',db.teams,x?.teamId)}${select('Papel demonstrativo','role',[{id:'Gestora',title:'Gestora'},{id:'Produtor',title:'Produtor'},{id:'Editor',title:'Editor'},{id:'Publicador',title:'Publicador'},{id:'Colaborador',title:'Colaborador'}],x?.role||'Editor')}${submit}</form>`}else if(type==='media'){body=`<form class="form-grid" data-form="media">${field('Nome do arquivo','name','','text','required')}${field('URL da imagem','url','','url','required')}${submit}</form>`}if(hosted&&type==='series'){
+function openEditor(type,entityId){const editing=!!entityId,x=editing?by(type,entityId):null;let body='';if(type==='series'){body=`<form class="form-grid" data-form="series" data-id="${entityId||''}">${field('Título','title',x?.title,'text','required')}${field('Categoria','category',x?.category||'Documentário','text','required')}${area('Sinopse','summary',x?.summary)}${mediaField('Pôster vertical','poster',x?.poster||img('new-poster',650,900),'poster')}${mediaField('Banner horizontal','banner',x?.banner||img('new-banner',1300,700),'banner')}<div class="field span2"><label>Equipes responsáveis (selecione uma ou mais)</label><div class="pillset">${db.teams.map(t=>`<label class="pill"><input type="checkbox" name="teamIds" value="${t.id}" ${(x?.teamIds||[]).includes(t.id)?'checked':''}> ${esc(t.name)}</label>`).join('')}</div></div><label class="span2"><input type="checkbox" name="featured" ${x?.featured?'checked':''}> Destaque no portal</label>${submit}</form>`}else if(type==='seasons'){body=`<form class="form-grid" data-form="seasons" data-id="${entityId||''}">${select('Série','seriesId',db.series,x?.seriesId)}${field('Número','number',x?.number||seasons(db.series[0]?.id).length+1,'number','min="1" required')}${field('Título da temporada','title',x?.title||'Nova temporada','text','required')}${submit}</form>`}else if(type==='episodes'){body=`<form class="form-grid" data-form="episodes" data-id="${entityId||''}">${select('Temporada','seasonId',db.seasons.map(s=>({...s,title:`${by('series',s.seriesId)?.title} — T${s.number}`})),x?.seasonId)}${field('Número do episódio','number',x?.number||1,'number','min="1" required')}${field('Título','title',x?.title,'text','required')}${field('Duração estimada (min)','duration',x?.duration||20,'number','min="1"')}${area('Sinopse','summary',x?.summary)}${field('URL ou ID do vídeo YouTube','youtube',x?.youtube)}${mediaField('Thumbnail do episódio','thumbnail',x?.thumbnail||img('new-episode',1200,700),'thumbnail')}${field('Disponível a partir de','releaseAt',(x?datetimeLocal(x.releaseAt):future(1)),'datetime-local','required')}${field('Disponível até (opcional)','endAt',(x?datetimeLocal(x.endAt):''),'datetime-local')}${select('Estado editorial','status',[{id:'published',title:'Aprovado / publicado'},{id:'scheduled',title:'Agendado'},{id:'draft',title:'Rascunho'},{id:'suspended',title:'Suspenso'}],x?.status||'scheduled')}${submit}</form>`}else if(type==='banners'){body=`<form class="form-grid" data-form="banners" data-id="${entityId||''}">${field('Título','title',x?.title,'text','required')}${field('Prioridade (menor primeiro)','order',x?.order||1,'number','min="1"')}${area('Texto de apoio','subtitle',x?.subtitle)}${mediaField('Banner desktop','image',x?.image||img('new-campaign',1400,800),'banner')}${mediaField('Banner mobile (opcional)','mobileImage',x?.mobileImage,'banner')}${select('Destino: série','target',db.series,x?.target)}${field('Início da campanha','startAt',(x?datetimeLocal(x.startAt):future(1)),'datetime-local')}${field('Fim da campanha','endAt',(x?datetimeLocal(x.endAt):''),'datetime-local')}<label class="span2"><input type="checkbox" name="active" ${x?.active!==false?'checked':''}> Campanha habilitada</label>${submit}</form>`}else if(type==='teams'){body=`<form class="form-grid" data-form="teams" data-id="${entityId||''}">${field('Nome da equipe','name',x?.name,'text','required')}${field('Descrição','description',x?.description)}${submit}</form>`}else if(type==='members'){body=`<form class="form-grid" data-form="members" data-id="${entityId||''}">${field('Nome','name',x?.name,'text','required')}${field('E-mail','email',x?.email,'email','required')}${select('Equipe','teamId',db.teams,x?.teamId)}${select('Papel na equipe','role',[{id:'Gestora',title:'Gestora'},{id:'Produtor',title:'Produtor'},{id:'Editor',title:'Editor'},{id:'Publicador',title:'Publicador'},{id:'Colaborador',title:'Colaborador'}],x?.role||'Editor')}${submit}</form>`}else if(type==='media'){body=`<form class="form-grid" data-form="media">${field('Nome do arquivo','name','','text','required')}${field('URL da imagem','url','','url','required')}${submit}</form>`}if(hosted&&type==='series'){
   if(editing){
     body=body.replaceAll('name="teamIds"','name="teamIds" disabled');
     body+='<p class="notice">Equipes responsáveis não podem ser alteradas após a criação nesta etapa.</p>';
@@ -581,7 +710,7 @@ function openEditor(type,entityId){const editing=!!entityId,x=editing?by(type,en
 if(hosted&&type==='members'){
   const roles=[{id:'manager',title:'Gestor'},{id:'editor',title:'Editor'},{id:'publisher',title:'Publicador'},{id:'viewer',title:'Visualizador'}];
   const roleSelect=select('Papel na equipe','role',roles,x?.role||'editor');
-  body=body.replace(/<div class="field"><label>Papel demonstrativo<\/label>[\s\S]*?<\/select><\/div>/,roleSelect);
+  body=body.replace(/<div class="field"><label>Papel na equipe<\/label>[\s\S]*?<\/select><\/div>/,roleSelect);
   if(!editing){
     const credentials=field('Senha inicial (mínimo 12 caracteres)','password','','password','minlength="12" maxlength="128" required')+
       '<p class="span2 muted tiny">Forneça a senha ao integrante por um canal seguro. Ele poderá entrar no Studio após o cadastro.</p>';
@@ -593,10 +722,95 @@ if(hosted&&type==='members'){
 if(hosted&&type==='seasons'&&editing)body=body.replace('name="seriesId"','name="seriesId" disabled');
 if(hosted&&type==='episodes'&&editing)body=body.replace('name="seasonId"','name="seasonId" disabled');
 modal((editing?'Editar ':'Adicionar ')+({series:'série',seasons:'temporada',episodes:'episódio',banners:'banner',teams:'equipe',members:'integrante',media:'mídia'}[type]),body)}
+
+const catalogSingular={series:'série',seasons:'temporada',episodes:'episódio'};
+function openCatalogDelete(type,id){
+ const entity=by(type,id);if(!entity)return;
+ const name=entity.title||entity.name||'Item';
+ const deps=type==='series'?db.seasons.filter(s=>s.seriesId===id).length:
+  type==='seasons'?db.episodes.filter(e=>e.seasonId===id).length:0;
+ const label=type==='series'?'temporada(s)':type==='seasons'?'episódio(s)':'';
+ const text=deps?
+  'Este conteúdo possui '+deps+' '+label+'. Exclua os conteúdos vinculados primeiro.':
+  'Esta ação é permanente e não pode ser desfeita.';
+ const next=type==='series'?'catalog-to-seasons':type==='seasons'?'catalog-to-episodes':'';
+ const goId=type==='series'?id:entity.seriesId;
+ const body='<div class="catalog-delete-dialog"><p>Deseja excluir <strong>'+esc(name)+'</strong>?</p>'+
+ '<p class="'+(deps?'catalog-delete-warning':'muted')+'">'+esc(text)+'</p>'+
+ '<div class="row between"><button type="button" class="btn" data-action="close-modal">Cancelar</button>'+
+ (deps?'<button type="button" class="btn" data-action="'+next+'" data-id="'+esc(goId)+'">Ver '+(type==='series'?'temporadas':'episódios')+'</button>':
+ '<button type="button" class="btn primary catalog-confirm-danger" data-action="catalog-confirm-delete" data-type="'+type+
+ '" data-id="'+esc(id)+'">Excluir '+catalogSingular[type]+'</button>')+'</div></div>';
+ modal('Excluir '+catalogSingular[type],body);
+}
+async function deleteCatalogEntity(type,id,button){
+ const endpoints={series:'series',seasons:'seasons',episodes:'episodes'};
+ if(!endpoints[type]||!by(type,id))return;
+ if(button)button.disabled=true;
+ try{
+  await apiRequest('/api/v1/studio/'+endpoints[type]+'/'+encodeURIComponent(id),{method:'DELETE'});
+  await fetchStudioData();
+  await refreshPublicCatalog();
+  document.getElementById('modal-root').innerHTML='';
+  render();toast('Conteúdo excluído.');
+ }catch(error){
+  const messages={series_has_seasons:'Exclua primeiro as temporadas desta série.',
+   series_has_banners:'A série está vinculada a banners. Remova os banners antes.',
+   season_has_episodes:'Exclua primeiro os episódios desta temporada.',
+   publish_denied:'Você não tem permissão para excluir conteúdo publicado.',
+   forbidden:'Você não tem permissão para excluir este conteúdo.'};
+  toast(messages[error.message]||error.message||'Não foi possível excluir.');
+  if(button)button.disabled=false;
+ }
+}
+
 function formSubmit(form){const type=form.dataset.form;if(!type)return;
 if(hosted){if(['series','seasons','episodes','teams','members','banners'].includes(type)){void saveRemoteEntity(form);}else toast('Esta operação ainda não está habilitada.');return;}
-const f=new FormData(form),v=Object.fromEntries(f.entries());if(type==='episodes'&&v.endAt&&v.releaseAt&&new Date(v.endAt)<=new Date(v.releaseAt)){toast('O término precisa ser posterior à estreia.');return}if(type==='banners'&&v.endAt&&v.startAt&&new Date(v.endAt)<=new Date(v.startAt)){toast('O fim da campanha precisa ser posterior ao início.');return}if(type==='series'){v.slug=slug(v.title);v.teamIds=f.getAll('teamIds');v.featured=f.has('featured')}if(type==='banners'){v.active=f.has('active');v.order=Number(v.order)||1}if(type==='episodes'){v.number=Number(v.number);v.duration=Number(v.duration);v.status=v.status||'scheduled'}if(type==='seasons')v.number=Number(v.number);if(type==='series'&&!v.teamIds.length){toast('Selecione uma equipe responsável.');return}const old=form.dataset.id&&by(type,form.dataset.id);if(old)Object.assign(old,v);else db[type].push({id:id(type[0]),...v});save();document.getElementById('modal-root').innerHTML='';render();toast('Alterações salvas nesta demonstração.')}
+const f=new FormData(form),v=Object.fromEntries(f.entries());if(type==='episodes'&&v.endAt&&v.releaseAt&&new Date(v.endAt)<=new Date(v.releaseAt)){toast('O término precisa ser posterior à estreia.');return}if(type==='banners'&&v.endAt&&v.startAt&&new Date(v.endAt)<=new Date(v.startAt)){toast('O fim da campanha precisa ser posterior ao início.');return}if(type==='series'){v.slug=slug(v.title);v.teamIds=f.getAll('teamIds');v.featured=f.has('featured')}if(type==='banners'){v.active=f.has('active');v.order=Number(v.order)||1}if(type==='episodes'){v.number=Number(v.number);v.duration=Number(v.duration);v.status=v.status||'scheduled'}if(type==='seasons')v.number=Number(v.number);if(type==='series'&&!v.teamIds.length){toast('Selecione uma equipe responsável.');return}const old=form.dataset.id&&by(type,form.dataset.id);if(old)Object.assign(old,v);else db[type].push({id:id(type[0]),...v});save();document.getElementById('modal-root').innerHTML='';render();toast('Alterações salvas.')}
 function handle(action,el){const eid=el.dataset.id;
+if(action==='create-season'){
+ if(!db.series.length){toast('Crie uma série antes de cadastrar temporadas.');return;}
+ openEditor('seasons');
+ const requested=catalogFilters.seasons.seriesId;
+ if(requested!=='all'){
+  const input=document.querySelector('#modal-root [name="seriesId"]');
+  if(input)input.value=requested;
+ }
+ return;
+}
+if(action==='create-episode'){
+ if(!db.seasons.length){toast('Crie uma temporada antes de cadastrar episódios.');return;}
+ openEditor('episodes');
+ const selected=catalogFilters.episodes.seriesId;
+ if(selected!=='all'){
+  const season=db.seasons.filter(se=>se.seriesId===selected).sort((a,b)=>a.number-b.number)[0];
+  if(season){const input=document.querySelector('#modal-root [name="seasonId"]');if(input)input.value=season.id;}
+ }
+ return;
+}
+if(action==='catalog-clear'){
+ const type=el.dataset.type;if(!catalogFilters[type])return;
+ for(const key of Object.keys(catalogFilters[type]))catalogFilters[type][key]=key==='query'?'':'all';
+ render();return;
+}
+if(action==='catalog-to-seasons'){
+ catalogFilters.seasons.seriesId=eid;
+ document.getElementById('modal-root').innerHTML='';
+ nav('/studio/seasons');return;
+}
+if(action==='catalog-to-episodes'){
+ catalogFilters.episodes.seriesId=eid;
+ document.getElementById('modal-root').innerHTML='';
+ nav('/studio/episodes');return;
+}
+if(action==='catalog-confirm-delete'){void deleteCatalogEntity(el.dataset.type,eid,el);return}
+if(action.startsWith('delete-')&&['series','season','episode'].includes(action.slice(7))){
+ const type={series:'series',season:'seasons',episode:'episodes'}[action.slice(7)];
+ if(hosted)openCatalogDelete(type,eid);
+ else{toast('A exclusão está disponível no Studio.');}
+ return;
+}
+
 if(action==='player-toggle'){toggleYouTubePlayback();return}
 if(action==='retry-public'){window.location.reload();return}
 if(action==='settings-jump'){document.getElementById(el.dataset.target)?.scrollIntoView({behavior:'smooth',block:'start'});return}
@@ -632,7 +846,7 @@ if(action==='logout'){void logoutStudio();return}
 if(hosted&&route.studio&&(/^(reset|move-section|toggle-section)$/.test(action))){
   toast('Funcionalidade administrativa em migração. Nenhum dado foi alterado.');return;
 }
-switch(action){case'route':nav(el.dataset.path);break;case'go-studio':nav('/studio/dashboard');break;case'go-series':nav('/serie/'+eid);break;case'watch':if(eid)nav('/assistir/'+eid);break;case'play-video':{const e=by('episodes',eid);if(!e||!playable(e))break;if(ytId(e.youtube)){activeVideo=eid;render()}else toast('Vídeo fictício. Insira um link do YouTube no Studio para reproduzir.');break}case'home-view':homeView=el.dataset.view==='list'?'list':'grid';render();break;case'catalog-view':catalogView=el.dataset.view==='list'?'list':'grid';localStorage.setItem('cenalivre-catalog-view',catalogView);render();break;case'filter-cat':filterCategory=el.dataset.cat;history.replaceState(null,'','#/explorar');render();break;case'fav':{const i=db.saved.indexOf(eid);if(i>=0)db.saved.splice(i,1);else db.saved.push(eid);save();render();toast(i>=0?'Removido da lista.':'Adicionado à lista deste navegador.');break}case'toggle-side':document.getElementById('sidebar')?.classList.toggle('open');break;case'close-modal':document.getElementById('modal-root').innerHTML='';break;case'create-series':openEditor('series');break;case'edit-series':openEditor('series',eid);break;case'create-season':openEditor('seasons');break;case'edit-season':openEditor('seasons',eid);break;case'create-episode':openEditor('episodes');break;case'edit-episode':openEditor('episodes',eid);break;case'create-banner':openEditor('banners');break;case'edit-banner':openEditor('banners',eid);break;case'create-team':openEditor('teams');break;case'edit-team':openEditor('teams',eid);break;case'create-member':openEditor('members');break;case'edit-member':openEditor('members',eid);break;case'add-media':openEditor('media');break;case'toggle-section':{let x=by('homeSections',eid);if(x)x.active=el.checked;save();render();break}case'move-section':{const i=db.homeSections.findIndex(x=>x.id===eid),j=i+Number(el.dataset.dir);if(j>=0&&j<db.homeSections.length)[db.homeSections[i],db.homeSections[j]]=[db.homeSections[j],db.homeSections[i]];save();render();break}case'copy-url':navigator.clipboard?.writeText(el.dataset.url).then(()=>toast('URL copiada.'),()=>toast('Não foi possível copiar automaticamente.'));break;case'reset':if(confirm('Restaurar todos os dados fictícios? Suas alterações locais serão perdidas.')){db=initial();save();nav('/studio/dashboard');render();toast('Dados restaurados.')}break;}}
+switch(action){case'route':nav(el.dataset.path);break;case'go-studio':nav('/studio/dashboard');break;case'go-series':nav('/serie/'+eid);break;case'watch':if(eid)nav('/assistir/'+eid);break;case'play-video':{const e=by('episodes',eid);if(!e||!playable(e))break;if(ytId(e.youtube)){activeVideo=eid;render()}else toast('Vídeo indisponível. Verifique o link do episódio.');break}case'home-view':homeView=el.dataset.view==='list'?'list':'grid';render();break;case'catalog-view':catalogView=el.dataset.view==='list'?'list':'grid';localStorage.setItem('cenalivre-catalog-view',catalogView);render();break;case'filter-cat':filterCategory=el.dataset.cat;history.replaceState(null,'','#/explorar');render();break;case'fav':{const i=db.saved.indexOf(eid);if(i>=0)db.saved.splice(i,1);else db.saved.push(eid);save();render();toast(i>=0?'Removido da lista.':'Adicionado à lista deste navegador.');break}case'toggle-side':document.getElementById('sidebar')?.classList.toggle('open');break;case'close-modal':document.getElementById('modal-root').innerHTML='';break;case'create-series':openEditor('series');break;case'edit-series':openEditor('series',eid);break;case'create-season':openEditor('seasons');break;case'edit-season':openEditor('seasons',eid);break;case'create-episode':openEditor('episodes');break;case'edit-episode':openEditor('episodes',eid);break;case'create-banner':openEditor('banners');break;case'edit-banner':openEditor('banners',eid);break;case'create-team':openEditor('teams');break;case'edit-team':openEditor('teams',eid);break;case'create-member':openEditor('members');break;case'edit-member':openEditor('members',eid);break;case'add-media':openEditor('media');break;case'toggle-section':{let x=by('homeSections',eid);if(x)x.active=el.checked;save();render();break}case'move-section':{const i=db.homeSections.findIndex(x=>x.id===eid),j=i+Number(el.dataset.dir);if(j>=0&&j<db.homeSections.length)[db.homeSections[i],db.homeSections[j]]=[db.homeSections[j],db.homeSections[i]];save();render();break}case'copy-url':navigator.clipboard?.writeText(el.dataset.url).then(()=>toast('URL copiada.'),()=>toast('Não foi possível copiar automaticamente.'));break;case'reset':if(confirm('Restaurar todos os dados fictícios? Suas alterações locais serão perdidas.')){db=initial();save();nav('/studio/dashboard');render();toast('Dados restaurados.')}break;}}
 document.addEventListener('click',e=>{
  const el=e.target.closest('[data-action]');if(!el)return;
  if(el.dataset.action==='close-modal'&&el.classList.contains('modal-backdrop')&&e.target!==el)return;
@@ -659,6 +873,13 @@ if(e.target.id==='upload-settings-form'){
 if(e.target.id==='studio-login'){void loginStudio(e.target);return;}
 if(hosted&&e.target.id==='settings-form'){void saveRemoteSettings(e.target);return;}
 if(e.target.id==='settings-form'){const f=new FormData(e.target);db.preferences={siteName:f.get('siteName'),siteDescription:f.get('siteDescription'),autoplay:f.has('autoplay')};save();toast('Preferências salvas.')}else formSubmit(e.target)});document.addEventListener('change',e=>{
+if(e.target.matches('[data-catalog-filter]')){
+ const type=e.target.closest('[data-catalog-type]')?.dataset.catalogType;
+ if(type&&catalogFilters[type]){
+  catalogFilters[type][e.target.dataset.catalogFilter]=e.target.value;
+  refreshCatalogTable(type);
+ }return;
+}
 if(e.target.id==='media-kind-filter'){mediaFilter=e.target.value;refreshMediaResults();return}
 if(e.target.id==='media-tag-filter'){mediaTagFilter=e.target.value;refreshMediaResults();return}
 if(e.target.id==='media-picker-kind'){updateMediaPicker();return}
@@ -692,6 +913,11 @@ document.addEventListener('drop',e=>{
   }
 });
 document.addEventListener('input',e=>{
+if(e.target.matches('[data-catalog-search]')){
+ const type=e.target.dataset.catalogSearch;
+ if(catalogFilters[type]){catalogFilters[type].query=e.target.value;refreshCatalogTable(type);}
+ return;
+}
 if(e.target.id==='media-search'){mediaSearch=e.target.value;refreshMediaResults();return}
 if(e.target.id==='media-picker-search'){updateMediaPicker();return}
 if(e.target.matches('.media-manual-url input[name]')){updateInlineMediaField(e.target.name,e.target.value);return;}

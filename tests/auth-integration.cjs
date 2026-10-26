@@ -178,6 +178,34 @@ async function call(path,method='GET',body){
   const publicBranding=await call('/api/v1/public/bootstrap');
   assert.equal(publicBranding.data.branding.logoUrl,'assets/orbital-poster.svg');
 
+
+  // Editorial deletion is explicit and refuses to cascade productions or episodes.
+  assert.equal((await call('/api/v1/studio/series/'+sid,'DELETE')).code,409,'Do not delete series with seasons');
+  assert.equal((await call('/api/v1/studio/seasons/'+season.data.id,'DELETE')).code,409,'Do not delete season with episodes');
+  const tempTitle='Teste de remoção '+randomBytes(4).toString('hex');
+  const created=await call('/api/v1/studio/series','POST',{
+    title:tempTitle,category:'Teste',summary:'Remoção em ordem',poster:'assets/orbital-poster.svg',
+    banner:'assets/orbital-banner.svg',teamIds:[teamId],visibility:'draft'
+  });
+  assert.equal(created.code,201,'Create removable series');
+  const createdSeason=await call('/api/v1/studio/seasons','POST',{seriesId:created.data.id,number:1,title:'Temporada teste'});
+  assert.equal(createdSeason.code,201,'Create removable season');
+  const createdEpisode=await call('/api/v1/studio/episodes','POST',{
+    seasonId:createdSeason.data.id,number:1,title:'Episódio teste',summary:'',
+    youtube:'',thumbnail:'assets/episode-01.svg',releaseAt:null,duration:20,status:'draft'
+  });
+  assert.equal(createdEpisode.code,201,'Create removable episode');
+  assert.equal((await call('/api/v1/studio/series/'+created.data.id,'DELETE')).code,409,'Dependencies protect series');
+  assert.equal((await call('/api/v1/studio/seasons/'+createdSeason.data.id,'DELETE')).code,409,'Dependencies protect seasons');
+  assert.equal((await call('/api/v1/studio/episodes/'+createdEpisode.data.id,'DELETE')).code,200,'Remove episode');
+  assert.equal((await call('/api/v1/studio/seasons/'+createdSeason.data.id,'DELETE')).code,200,'Remove empty season');
+  assert.equal((await call('/api/v1/studio/series/'+created.data.id,'DELETE')).code,200,'Remove empty series');
+  assert.equal((await call('/api/v1/studio/series/'+created.data.id,'DELETE')).code,404,'Already-deleted series not found');
+  const currentSeries=await call('/api/v1/studio/bootstrap');
+  assert.equal(currentSeries.data.series.some(x=>x.id===created.data.id),false,'No deleted series in Studio');
+  const publicAfterDelete=await call('/api/v1/public/bootstrap');
+  assert.equal(publicAfterDelete.data.series.some(x=>x.id===created.data.id),false,'No deleted series in portal');
+
   const editorPassword=randomBytes(24).toString('hex');
   const user=await call('/api/v1/studio/users','POST',{email:'integration-editor@example.test',name:'Integration Editor',password:editorPassword});
   assert.equal(user.code,201);
@@ -192,9 +220,14 @@ async function call(path,method='GET',body){
   const form={title:'Além da Órbita',category:'Ficção científica',summary:'Texto atualizado na integração',poster:'assets/orbital-poster.svg',banner:'assets/orbital-banner.svg'};
   assert.equal((await call('/api/v1/studio/series/s1','PUT',form)).code,200);
   const editorCsrf=csrf;csrf='';
+  assert.equal((await call('/api/v1/studio/episodes/e1','DELETE')).code,403,'CSRF required for deletes');
+
   assert.equal((await call('/api/v1/studio/series/s1','PUT',form)).code,403);
   csrf=editorCsrf;
   assert.equal((await call('/api/v1/studio/series/s3','PUT',form)).code,403);
+  assert.equal((await call('/api/v1/studio/series/s3','DELETE')).code,403,"Cannot delete another team's series");
+  assert.equal((await call('/api/v1/studio/episodes/e1','DELETE')).code,403,'Editor cannot delete published episode without publisher permission');
+
   assert.equal((await call('/api/v1/studio/series/s1','PUT',{...form,featured:true})).code,403);
   assert.equal((await call('/api/v1/auth/logout','POST')).code,200);
   assert.equal((await call('/api/v1/studio/bootstrap')).code,401);
