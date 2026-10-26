@@ -181,7 +181,7 @@ function openMediaPicker(field,kind){
  if(!root){root=document.createElement('div');root.id='media-picker-root';document.body.append(root)}
  root.innerHTML='<div class="media-picker-backdrop" data-action="media-picker-close">'+
  '<div class="media-picker-panel form-surface-light" role="dialog" aria-modal="true" aria-label="Escolher mídia">'+
- '<div class="row between"><h2>Escolher mídia</h2><button class="btn small" data-action="media-picker-close" aria-label="Fechar">${studioIcon('x')}</button></div>'+
+ '<div class="row between"><h2>Escolher mídia</h2><button class="btn small" data-action="media-picker-close" aria-label="Fechar">'+studioIcon('x')+'</button></div>'+
  '<p class="muted">Selecione uma imagem já enviada ou envie um novo arquivo.</p>'+
  '<div class="media-toolbar"><input class="input" id="media-picker-search" placeholder="Pesquisar por nome ou tag">'+
  '<select class="select" id="media-picker-kind">'+
@@ -911,9 +911,9 @@ function editorialPanel(type){
  const heads={banners:['Campanha','Estado','Início','Término','Ações'],
   sections:['Seção','Tipo','Visibilidade','Ordem','Ações'],
   schedule:['Episódio','Estado','Estreia','Término','Ações']};
- const buttons=type==='banners'?'<button type="button" class="btn primary" data-action="create-banner">${studioIcon('plus')} Novo banner</button>':
-  type==='sections'?'<button type="button" class="btn primary" data-action="editorial-section-create">${studioIcon('plus')} Nova seção</button>':
-   '<button type="button" class="btn primary" data-action="create-episode">${studioIcon('plus')} Novo episódio</button>';
+ const buttons=type==='banners'?'<button type="button" class="btn primary" data-action="create-banner">'+studioIcon('plus')+' Novo banner</button>':
+  type==='sections'?'<button type="button" class="btn primary" data-action="editorial-section-create">'+studioIcon('plus')+' Nova seção</button>':
+   '<button type="button" class="btn primary" data-action="create-episode">'+studioIcon('plus')+' Novo episódio</button>';
  return '<section class="panel catalog-manager" data-editorial-panel="'+type+'"><div class="row between cms-panel-head">'+
  '<h2>'+titles[type]+'</h2>'+buttons+'</div>'+editorialToolbar(type)+editorialActions(type)+
  '<p class="catalog-results" data-editorial-result-count="'+type+'">'+editorialItems(type).length+' itens</p>'+
