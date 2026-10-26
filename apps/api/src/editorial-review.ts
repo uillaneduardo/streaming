@@ -79,6 +79,53 @@ export function registerEditorialReview(app:FastifyInstance){
    await con.commit();return reply.code(201).send({id:rid,versionId:version});
   }catch(error){await con.rollback();throw error;}finally{con.release();}
  });
+
+ // Recover metadata only: never revert publication state, permissions, team ownership or slugs.
+ app.post<{Params:{kind:string;id:string};Body:{versionId?:unknown}}>(
+ "/api/v1/studio/editorial/:kind/:id/restore",async(req,reply)=>{
+  const actor=await requireActor(req,reply,true);if(!actor)return;
+  const {kind,id}=req.params,versionId=Number(req.body?.versionId);
+  if(!types.includes(kind)||!validId(id)||!Number.isSafeInteger(versionId)||versionId<=0)
+   return fail(reply,400,"invalid_revision");
+  const sid=await target(kind as Kind,id);
+  if(!sid)return fail(reply,404,"not_found");
+  if(!await permitted(actor,kind as Kind,sid,"edit"))return fail(reply,403,"forbidden");
+  const con=await pool.getConnection();
+  try{
+   await con.beginTransaction();
+   const [row]=await con.execute<RowDataPacket[]>(
+    "SELECT * FROM "+tableFor(kind as Kind)+" WHERE id=? FOR UPDATE",[id]);
+   if(!row.length){await con.rollback();return fail(reply,404,"not_found");}
+   const [historical]=await con.execute<RowDataPacket[]>(
+    "SELECT snapshot FROM editorial_versions WHERE id=? AND target_type=? AND target_id=?",
+    [versionId,kind,id]);
+   if(!historical.length){await con.rollback();return fail(reply,404,"version_not_found");}
+   const raw=(historical[0] as Row).snapshot;
+   const snapshot=typeof raw==="string"?JSON.parse(raw):raw;
+   if(!snapshot||typeof snapshot!=="object"){await con.rollback();return fail(reply,409,"invalid_snapshot");}
+   if(kind==="series"){
+    await con.execute("UPDATE series SET title=?,category=?,summary=?,poster=?,banner=?,featured=? WHERE id=?",
+     [snapshot.title,snapshot.category,snapshot.summary,snapshot.poster,snapshot.banner,snapshot.featured,id]);
+   }else if(kind==="season"){
+    await con.execute("UPDATE seasons SET title=?,number=? WHERE id=?",
+     [snapshot.title,snapshot.number,id]);
+   }else if(kind==="episode"){
+    if((row[0] as Row).status==="published"&&!snapshot.releaseAt){
+     await con.rollback();return fail(reply,409,"episode_missing_release_date");
+    }
+    await con.execute("UPDATE episodes SET title=?,number=?,summary=?,youtube_id=?,thumbnail=?,release_at=?,end_at=?,duration=? WHERE id=?",
+     [snapshot.title,snapshot.number,snapshot.summary,snapshot.youtubeId,snapshot.thumbnail,
+      snapshot.releaseAt,snapshot.endAt,snapshot.duration,id]);
+   }else{
+    await con.execute("UPDATE banners SET title=?,subtitle=?,image=?,mobile_image=?,target_series_id=?,start_at=?,end_at=?,display_order=? WHERE id=?",
+     [snapshot.title,snapshot.subtitle,snapshot.image,snapshot.mobileImage,snapshot.target,snapshot.startAt,
+      snapshot.endAt,snapshot.order,id]);
+   }
+   await con.execute("INSERT INTO audit_log(id,actor_id,action,target_type,target_id) VALUES(?,?,?,?,?)",
+    [randomUUID(),actor.id,"editorial.restored",kind,id]);
+   await con.commit();return {ok:true,restoredFrom:versionId};
+  }catch(error){await con.rollback();throw error;}finally{con.release();}
+ });
  app.post<{Params:{id:string};Body:{decision?:unknown;note?:unknown}}>(
  "/api/v1/studio/editorial/reviews/:id/decision",async(req,reply)=>{
   const actor=await requireActor(req,reply,true);if(!actor)return;
