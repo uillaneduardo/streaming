@@ -100,7 +100,7 @@ async function saveRemoteEntity(form){
       path='/api/v1/studio/episodes'+(id?'/'+encodeURIComponent(id):'');
       const release=pick('releaseAt'),end=pick('endAt');
       if(end&&release&&new Date(end)<=new Date(release)){toast('O fim precisa ser posterior à estreia.');return;}
-      payload={seasonId:pick('seasonId'),number:Number(pick('number')),title:pick('title'),
+      payload={seasonId:pick('seasonId')||(id?by('episodes',id)?.seasonId:''),number:Number(pick('number')),title:pick('title'),
         summary:pick('summary'),duration:Number(pick('duration')||20),youtube:pick('youtube'),
         thumbnail:pick('thumbnail'),releaseAt:isoFromInput(release),endAt:isoFromInput(end),status:pick('status')};
     }else{toast('Esta operação ainda não está habilitada no servidor.');return}
