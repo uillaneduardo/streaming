@@ -62,7 +62,7 @@ async function publicReference(id:string){
  const url="/api/v1/media/files/"+id;
  const [series,episodes,banners,branding]=await Promise.all([
  list("SELECT 1 FROM series WHERE visibility='public' AND (poster=? OR banner=?) LIMIT 1",[url,url]),
- list("SELECT 1 FROM episodes e JOIN seasons se ON se.id=e.season_id JOIN series s ON s.id=se.series_id WHERE s.visibility='public' AND e.thumbnail=? AND e.status IN ('published','scheduled') LIMIT 1",[url]),
+ list("SELECT 1 FROM episodes e JOIN seasons se ON se.id=e.season_id JOIN series s ON s.id=se.series_id WHERE s.visibility='public' AND se.status='published' AND e.thumbnail=? AND e.status IN ('published','scheduled') LIMIT 1",[url]),
  list("SELECT 1 FROM banners WHERE active=1 AND (image=? OR mobile_image=?) AND (start_at IS NULL OR start_at<=UTC_TIMESTAMP(3)) AND (end_at IS NULL OR end_at>UTC_TIMESTAMP(3)) LIMIT 1",[url,url]),
  list("SELECT 1 FROM settings WHERE logo_url=? OR icon_url=? LIMIT 1",[url,url])
  ]);return !!(series.length||episodes.length||banners.length||branding.length);
