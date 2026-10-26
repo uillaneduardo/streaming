@@ -43,7 +43,7 @@ export function registerStudio(app:FastifyInstance){
     const ids=permitted.map(s=>String(s.id));
     const q=(arr:string[])=>arr.map(()=>"?").join(",");
     const links=ids.length?await rows("SELECT series_id,team_id FROM series_teams WHERE series_id IN("+q(ids)+")",ids):[];
-    const seasons=ids.length?await rows("SELECT id,series_id,number,title FROM seasons WHERE series_id IN("+q(ids)+")",ids):[];
+    const seasons=ids.length?await rows("SELECT id,series_id,number,title,status FROM seasons WHERE series_id IN("+q(ids)+")",ids):[];
     const seasonIds=seasons.map(x=>String(x.id));
     const episodes=seasonIds.length?await rows("SELECT id,season_id,number,title,summary,youtube_id,thumbnail,release_at,end_at,status,duration FROM episodes WHERE season_id IN("+q(seasonIds)+")",seasonIds):[];
     const members=await rows(user.isAdmin?"SELECT m.team_id,m.user_id,m.role,u.name,u.email FROM team_members m JOIN users u ON u.id=m.user_id":
@@ -59,7 +59,7 @@ export function registerStudio(app:FastifyInstance){
       teams,
       members:members.map(m=>({id:m.user_id,teamId:m.team_id,role:m.role,name:m.name,email:m.email})),
       series:permitted.map(s=>({id:s.id,title:s.title,slug:s.slug,category:s.category,summary:s.summary,poster:s.poster,banner:s.banner,featured:!!s.featured,visibility:s.visibility,teamIds:links.filter(x=>x.series_id===s.id).map(x=>x.team_id)})),
-      seasons:seasons.map(s=>({id:s.id,seriesId:s.series_id,number:s.number,title:s.title})),
+      seasons:seasons.map(s=>({id:s.id,seriesId:s.series_id,number:s.number,title:s.title,status:s.status})),
       episodes:episodes.map(e=>({id:e.id,seasonId:e.season_id,number:e.number,title:e.title,summary:e.summary,
         youtube:e.youtube_id||"",thumbnail:e.thumbnail,releaseAt:dt(e.release_at),endAt:dt(e.end_at),status:e.status,duration:e.duration})),
       banners:bannerRows.map(b=>({id:b.id,title:b.title,subtitle:b.subtitle,image:b.image,mobileImage:b.mobile_image||"",
