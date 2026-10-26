@@ -6,7 +6,7 @@ import {requireActor} from "./auth.js";
 
 type Category=RowDataPacket & {id:string;name:string};
 const validId=(v:unknown):v is string=>typeof v==="string"&&/^[a-zA-Z0-9_-]{1,36}$/.test(v);
-const nameOf=(v:unknown)=>typeof v==="string"&&v.trim().length>0&&v.trim().length<=100?v.trim().replace(/\\s+/g," "):null;
+const nameOf=(v:unknown)=>typeof v==="string"&&v.trim().length>0&&v.trim().length<=100?v.trim().replace(/\s+/g," "):null;
 const error=(reply:FastifyReply,code:number,message:string)=>reply.code(code).send({error:message});
 export async function categoryExists(name:string):Promise<boolean>{
  const [rows]=await pool.execute<RowDataPacket[]>("SELECT id FROM categories WHERE name=? LIMIT 1",[name]);
