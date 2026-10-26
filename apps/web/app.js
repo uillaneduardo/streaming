@@ -152,16 +152,19 @@ const mediaTags=s=>String(s||'').split(/[,;\n]/).map(t=>t.trim().toLowerCase()).
 const mediaFilterItems=(items,search,kind,tag)=>items.filter(a=>
   (kind==='all'||a.kind===kind)&&(!tag||a.tags.includes(tag))&&
   (!search||[a.name,a.originalName,a.kind,...a.tags].join(' ').toLowerCase().includes(search.toLowerCase())));
-const mediaCard=(a,picker=false)=>'<article class="media-card"><div class="media-image"><img src="'+esc(a.url)+'" alt="'+esc(a.name)+'" loading="lazy"></div>'+
+const mediaCard=(a,picker=false)=>'<article class="media-card"><div class="media-image media-tile">'+
+ '<img src="'+esc(a.url)+'" alt="'+esc(a.name)+'" loading="lazy">'+
+ (picker?'':'<div class="media-tile-overlay" aria-label="Ações da mídia">'+
+ '<button class="media-overlay-action" type="button" data-action="media-edit" data-id="'+esc(a.id)+'" title="Editar '+esc(a.name)+'" aria-label="Editar '+esc(a.name)+'">✎</button>'+
+ '<button class="media-overlay-action danger" type="button" data-action="media-delete" data-id="'+esc(a.id)+'" title="Excluir '+esc(a.name)+'" aria-label="Excluir '+esc(a.name)+'">×</button></div>')+'</div>'+
  '<strong title="'+esc(a.name)+'">'+esc(a.name)+'</strong>'+
  '<div class="media-meta">'+mediaName(a.kind)+' · '+(a.size/1048576).toFixed(2)+' MB</div>'+
  '<div class="media-tags">'+a.tags.map(t=>'<span class="media-tag">'+esc(t)+'</span>').join('')+'</div>'+
  '<div class="media-actions">'+(picker?
- '<button class="btn small primary" data-action="media-pick" data-id="'+esc(a.id)+'">Selecionar</button>':
- '<button class="btn small" data-action="media-edit" data-id="'+esc(a.id)+'">Editar</button>'+
- '<button class="btn small" data-action="media-copy" data-id="'+esc(a.id)+'">Copiar</button>'+
- '<button class="btn small" data-action="media-download" data-id="'+esc(a.id)+'">Baixar</button>'+
- '<button class="btn small danger" data-action="media-delete" data-id="'+esc(a.id)+'">Excluir</button>')+'</div></article>';
+ '<button type="button" class="btn small primary" data-action="media-pick" data-id="'+esc(a.id)+'">Selecionar</button>':
+ '<button type="button" class="btn small" data-action="media-edit" data-id="'+esc(a.id)+'">Editar</button>'+
+ '<button type="button" class="btn small" data-action="media-copy" data-id="'+esc(a.id)+'">Copiar URL</button>'+
+ '<button type="button" class="btn small" data-action="media-download" data-id="'+esc(a.id)+'">Baixar</button>')+'</div></article>';
 function openMediaPicker(field,kind){
  mediaPickerField=field;mediaPickerKind=kind||'all';
  let root=document.getElementById('media-picker-root');
